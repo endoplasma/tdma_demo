@@ -1,0 +1,184 @@
+/*
+ * Copyright (c) 2012, TU Dortmund University.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following
+ *    disclaimer in the documentation and/or other materials provided
+ *    with the distribution.
+ * 3. The name of the author may not be used to endorse or promote
+ *    products derived from this software without specific prior
+ *    written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
+ * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * This file is part of the Contiki OS
+ *
+ */
+/*---------------------------------------------------------------------------*/
+/**
+* \file
+*			Real-timer specific implementation for STM32F407.
+* \author
+*			Robert Budde <robert.budde@tu-dortmund.de>
+*/
+/*---------------------------------------------------------------------------*/
+
+
+#include "sys/energest.h"
+#include "sys/rtimer.h"
+#include "stm32f4xx.h"                  /* STM32F4xx Definitions              */
+
+
+#define DEBUG 0
+#if DEBUG
+#include <stdio.h>
+#define PRINTF(...) printf(__VA_ARGS__)
+#else
+#define PRINTF(...)
+#endif
+
+
+
+static uint32_t time_msb = 0;  // Most significant bits of the current time.
+
+// time of the next rtimer event. Initially is set to the max value.
+static rtimer_clock_t next_rtimer_time = 0;
+
+static uint16_t saved_TIM1_DIER;
+
+/*---------------------------------------------------------------------------*/
+void TIM1_UP_TIM10_IRQHandler(void) {
+	rtimer_clock_t now, clock_to_wait;
+	//PRINTF("O %4x.\r\n", TIM1_CNT);
+	//printf("OV ");
+
+	time_msb++;
+	now = ((rtimer_clock_t)time_msb << 16)|TIM1->CNT;
+
+	clock_to_wait = next_rtimer_time - now;
+
+	if (clock_to_wait <= 0x10000 && clock_to_wait > 0) { // We must set now the Timer Compare Register.		
+		TIM1->CCR1 = (uint16_t)clock_to_wait;
+		/* Clear the CC1 pending Bit if set */
+		TIM1->SR = (uint16_t)~TIM_SR_CC1IF;
+		/* Compare 1 interrupt enable. */
+		TIM1->DIER |= TIM_DIER_CC1IE;
+	}    
+		
+	/* Clear the Update pending Bit */
+	TIM1->SR = (uint16_t)~TIM_SR_UIF;
+}
+
+void TIM1_CC_IRQHandler(void) {
+	/* Compare 1 interrupt disable. */
+	TIM1->DIER &= ~TIM_DIER_CC1IE;
+
+	PRINTF("\nCompare event %4x\r\n", TIM1_CNT);
+	PRINTF("INT_TIM1FLAG %2x\r\n", INT_TIM1FLAG);
+	ENERGEST_ON(ENERGEST_TYPE_IRQ);
+	rtimer_run_next();
+	ENERGEST_OFF(ENERGEST_TYPE_IRQ);
+
+	/* Clear the Update pending Bit */
+	TIM1->SR = (uint16_t)~TIM_SR_CC1IF;
+}
+
+/*---------------------------------------------------------------------------*/
+void
+rtimer_arch_init(void)
+{
+  /* TIM1 clock enable */
+	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;
+
+  TIM1->CR1 = 0; /* no prescaler, upcounting, unbuffered etc. */
+
+  /* Set the Autoreload value to maximum */
+  TIM1->ARR = 0xffff;
+ 
+  /* Set the Prescaler value */
+  TIM1->PSC = RT_PRESCALER;
+    
+  /* Generate an update event to reload the Prescaler 
+     and the repetition counter value immediately */
+  TIM1->EGR = TIM_EGR_UG;  
+
+	/* Clear pending interrupts */
+	TIM1->SR = 0x0;
+	
+	/* Allow update-interrupt to trigger */
+	TIM1->DIER = TIM_DIER_UIE;
+	
+	/* Enable the TIM Counter */
+	TIM1->CR1 |= TIM_CR1_CEN;
+	
+	/* Enable the required TIM1 IRQ Channels --------------------------------------*/
+	NVIC_EnableIRQ(TIM1_UP_TIM10_IRQn);
+	NVIC_EnableIRQ(TIM1_CC_IRQn);
+}
+/*---------------------------------------------------------------------------*/
+/* THIS IS ATOMIC! SWI (Software Interrupt) instruction - see http://www.keil.com/support/docs/2990.htm */
+//void rtimer_arch_disable_irq(void) __swi(8)
+#warning CHECK IF SWI IS WORKING!!!
+void __SWI_8(void)
+{
+  saved_TIM1_DIER = TIM1->DIER;
+  TIM1->DIER = 0;
+}
+/*---------------------------------------------------------------------------*/
+void rtimer_arch_enable_irq(void)
+{
+  TIM1->DIER = saved_TIM1_DIER;
+}
+/*---------------------------------------------------------------------------*/
+rtimer_clock_t rtimer_arch_now(void)
+{
+  return ((rtimer_clock_t)time_msb << 16)|TIM1->CNT;
+}
+
+/*---------------------------------------------------------------------------*/
+
+void
+rtimer_arch_schedule(rtimer_clock_t t)
+{
+  rtimer_clock_t now, clock_to_wait;
+	
+  PRINTF("rtimer_arch_schedule time %4x\r\n", /*((uint32_t*)&t)+1,*/(uint32_t)t);
+  
+  next_rtimer_time = t;
+  
+  now = rtimer_arch_now();
+  
+  clock_to_wait = t - now;
+  
+  PRINTF("now %2x\r\n", TIM1->CNT);
+  PRINTF("clock_to_wait %4x\r\n", clock_to_wait);
+  
+	if(clock_to_wait <= 0x10000){ // We must set now the Timer Compare Register.
+    
+    TIM1->CCR1 = (uint16_t)now + (uint16_t)clock_to_wait;
+		/* Clear the CC1 pending Bit if set */
+		TIM1->SR = (uint16_t)~TIM_SR_CC1IF;
+		/* Compare 1 interrupt enable. */
+		TIM1->DIER |= TIM_DIER_CC1IE;
+    
+    PRINTF("2-TIM1->SR %2x\r\n", TIM1->SR);
+    
+  }
+  // else compare register will be set at overflow interrupt closer to the rtimer event.
+}
