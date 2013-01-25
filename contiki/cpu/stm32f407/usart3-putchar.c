@@ -35,11 +35,11 @@ int fgetc(FILE *f) {
   return 0;
 }
 
-
-int ferror(FILE *f) {
+#warning ferror commented out
+//int ferror(FILE *f) {
   /* Your implementation of ferror */
-  return EOF;
-}
+//  return EOF;
+//}
 
 
 void _ttywrch(int c) {

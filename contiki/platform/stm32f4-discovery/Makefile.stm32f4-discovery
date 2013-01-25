@@ -1,7 +1,7 @@
 # -*- makefile -*-
 
 # platform dependent files
-ARCH = button-sensor.c leds_arch.c
+ARCH = button-sensor.c leds_arch.c leds.c sensors.c
 
 CONTIKI_TARGET_DIRS = . 
 ifndef CONTIKI_TARGET_MAIN
