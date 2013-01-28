@@ -23,11 +23,22 @@ CONTIKI_CPU_DIRS += $(RADIO_CHIP_DIR)
 
 ## C Code Files
 STM32F_C = clock.c nvic.c random.c system_stm32f4xx.c unique_id.c	\
-	          usart3.c usart3-putchar.c watchdog.c rtimer-arch.c	\
-	          uart4.c uart4-putchar.c usb_bsp.c usbd_cdc_vcp.c	\
-	          usbd_desc.c usbd_usr.c usb_core.c usb_dcd.c  usb_dcd_int.c	\
-	          usbd_core.c usbd_ioreq.c usbd_req.c usbd_cdc_core.c	\
-	          vcp_putchar.c newlib_stubs.c
+	   watchdog.c rtimer-arch.c usb_bsp.c usbd_cdc_vcp.c		\
+	   usbd_desc.c usbd_usr.c usb_core.c usb_dcd.c usb_dcd_int.c	\
+	   usbd_core.c usbd_ioreq.c usbd_req.c usbd_cdc_core.c		\
+	   vcp_putchar.c newlib_stubs.c
+
+ifdef USE_USART3
+STM32F_C += usart3.c usart3-putchar.c
+endif
+
+ifdef USE_UART4
+STM32F_C += uart4.c uart4-putchar.c
+endif
+
+ifdef USE_SLIP
+STM32F_C += slip_vcp.c slip.c
+endif
 
 
 ## Assembler Files
@@ -40,9 +51,9 @@ CONTIKI_SOURCEFILES        += $(CONTIKI_TARGET_SOURCEFILES)
 
 ### Compiler definitions
 # GCC
-#GCC_NAME = /home/psp/sat/bin/arm-none-eabi-
+GCC_NAME = /home/psp/sat/bin/arm-none-eabi-
 #GCC_NAME = /home/psp/Downloads/gcc-arm-none-eabi-4_7-2012q4/bin/arm-none-eabi-
-GCC_NAME = /home/spliphi/sat2/bin/arm-none-eabi-
+#GCC_NAME = /home/spliphi/sat2/bin/arm-none-eabi-
 #GCC_NAME = arm-none-eabi-
 CC	 = $(GCC_NAME)gcc
 LD       = $(GCC_NAME)gcc
@@ -69,72 +80,20 @@ CFLAGSNO = -mthumb \
 	   -D DISCOVERY="1" \
 	   -D AUTOSTART_ENABLE \
 
-
-# KEIL Flags
-#-I..\..\cpu\stm32f407 
-#-I..\..\platform\stm32f4-discovery		\
-#-I..\..\cpu\avr\radio\rf230bb 
-#-I..\..\core 
-#-I..\..\core\dev		\
-#-I..\..\core\lib 
-#-I..\..\core\net 
-#-I..\..\core\net\mac			\
-#-I..\..\core\net\rime 
-#-I..\..\core\net\rpl 
-#-I..\..\core\sys		\
-#-I..\..\core\cfs 
-#-I..\..\core\ctk 
-#-I..\..\core\loader			\
-#-I..\..\cpu\stm32f407\VCP						\
-#-I..\..\cpu\stm32f407\STM32_USB_Device_Library\Class\cdc\inc		\
-#-I..\..\cpu\stm32f407\STM32_USB_Device_Library\Core\inc			\
-#-I..\..\cpu\stm32f407\STM32_USB_OTG_Driver\inc 
-#-I C:\Keil\ARM\RV31\Inc 
-#-I C:\Keil\ARM\CMSIS\Include 
-#-I C:\Keil\ARM\Inc\ST\STM32F4xx 
-#-o ".\Flash\*.o"		\
-#--omf_browse ".\Flash\*.crf" --depend ".\Flash\*.d"
-
 CFLAGS  += $(CFLAGSNO) $(OPTI)
 
 ASFLAGS = -mthumb -mcpu=cortex-m3 -c -g -Wall -Os -ffunction-sections \
-	    -mlittle-endian -fshort-enums -x assembler-with-cpp -Wa,-EL -lnosys
-
-# KEIL linker Flags
-#--cpu Cortex-M4 *.o 
-#--library_type=microlib 
-#--strict 
-#--scatter ".\Flash\contiki.sct" 
-#--summary_stderr 
-#--info summarysizes 
-#--map 
-#--xref 
-#--callgraph 
-#--symbols 
-#--info sizes --info totals --info unused --info veneers 
-# --list ".\Flash\contiki.map" 
-#-o ".\Flash\contiki.axf"
-
-# gnu.ld
-	    #-Wl,-static 
+	  -mlittle-endian -fshort-enums -x assembler-with-cpp \
+	  -Wa,-EL -lnosys
 
 LDFLAGS += -mcpu=cortex-m4 \
-	    -mthumb  \
-	    -Wl,-T$(CONTIKI_CPU)/stm32_flash.ld \
-	    -u Default_Handler \
-	    -nostartfiles \
-#	    -lnosys
-	    #-fno-exceptions -ffunction-sections -fdata-sections \
+	   -mthumb  \
+	   -Wl,-T$(CONTIKI_CPU)/stm32_flash.ld \
+	   -u Default_Handler \
+	   -nostartfiles \
+	   -fno-exceptions -ffunction-sections -fdata-sections \
+           -Wl,--gc-sections \
 
-           # -nostartfiles -Wl,--gc-sections \
-	   -nodefaultlibs
-#LDFLAGS += -mcpu=cortex-m4 \
-#	    -mthumb  \
-#	    -Wl,-T -Xlinker $(CONTIKI_CPU)/stm32_flash.ld \
-#	    -u Default_Handler \
-#	    -nostartfiles \
-#	    -Wl,-Map -Xlinker contiki-$(TARGET).map
-#
 ifndef ELF_LOADER
  # Do not use garbage collection when the elfloader is used.
 # LDFLAGS += -Wl,--gc-sections
@@ -142,7 +101,6 @@ endif  #ELF_LOADER
 
 SIZEFLAGS = -A
 OBJOPTS = -O binary
-
 
 ### Custom rules
 
@@ -157,7 +115,7 @@ vpath %.s $(CONTIKI_CPU)/
 CUSTOM_RULE_LINK = 1
 #
 %.$(TARGET): %.co $(PROJECT_OBJECTFILES) $(PROJECT_LIBRARIES) contiki-$(TARGET).a 
-	$(LD) $(LDFLAGS) $(TARGET_STARTFILES) ${filter-out %.a,$^} -lc -Wl,-\( ${filter %.a,$^} $(TARGET_LIBFILES) -Wl,-\) -o $@.elf
+	$(LD) $(LDFLAGS) $(TARGET_STARTFILES) ${filter-out %.a,$^} -lc -Wl,-\( ${filter %.a,$^} $(TARGET_LIBFILES) -Wl,-\) -lc -o $@.elf
 	echo >> contiki-$(TARGET).map
 	$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
 	$(OBJCOPY) $(OBJOPTS) $@.elf $@.bin 
