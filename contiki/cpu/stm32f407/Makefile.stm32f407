@@ -27,7 +27,7 @@ STM32F_C = clock.c nvic.c random.c system_stm32f4xx.c unique_id.c	\
 	          uart4.c uart4-putchar.c usb_bsp.c usbd_cdc_vcp.c	\
 	          usbd_desc.c usbd_usr.c usb_core.c usb_dcd.c  usb_dcd_int.c	\
 	          usbd_core.c usbd_ioreq.c usbd_req.c usbd_cdc_core.c	\
-	          vcp_putchar.c newlib-syscalls.c
+	          vcp_putchar.c newlib_stubs.c
 
 
 ## Assembler Files
@@ -42,7 +42,8 @@ CONTIKI_SOURCEFILES        += $(CONTIKI_TARGET_SOURCEFILES)
 # GCC
 #GCC_NAME = /home/psp/sat/bin/arm-none-eabi-
 #GCC_NAME = /home/psp/Downloads/gcc-arm-none-eabi-4_7-2012q4/bin/arm-none-eabi-
-GCC_NAME = arm-none-eabi-
+GCC_NAME = /home/spliphi/sat2/bin/arm-none-eabi-
+#GCC_NAME = arm-none-eabi-
 CC	 = $(GCC_NAME)gcc
 LD       = $(GCC_NAME)gcc
 AS	 = $(GCC_NAME)gcc
@@ -97,7 +98,7 @@ CFLAGSNO = -mthumb \
 CFLAGS  += $(CFLAGSNO) $(OPTI)
 
 ASFLAGS = -mthumb -mcpu=cortex-m3 -c -g -Wall -Os -ffunction-sections \
-	    -mlittle-endian -fshort-enums -x assembler-with-cpp -Wa,-EL
+	    -mlittle-endian -fshort-enums -x assembler-with-cpp -Wa,-EL -lnosys
 
 # KEIL linker Flags
 #--cpu Cortex-M4 *.o 
@@ -122,7 +123,8 @@ LDFLAGS += -mcpu=cortex-m4 \
 	    -Wl,-T$(CONTIKI_CPU)/stm32_flash.ld \
 	    -u Default_Handler \
 	    -nostartfiles \
-	    -fno-exceptions -ffunction-sections -fdata-sections \
+#	    -lnosys
+	    #-fno-exceptions -ffunction-sections -fdata-sections \
 
            # -nostartfiles -Wl,--gc-sections \
 	   -nodefaultlibs
@@ -152,13 +154,13 @@ CONTIKI_OBJECTFILES += ${addprefix $(OBJECTDIR)/,${call ssubst, $(STM32F_S)}}
 
 vpath %.s $(CONTIKI_CPU)/
 
-#CUSTOM_RULE_LINK = 1
+CUSTOM_RULE_LINK = 1
 #
-#%.$(TARGET): %.co $(PROJECT_OBJECTFILES) $(PROJECT_LIBRARIES) contiki-$(TARGET).a 
-#	$(LD) $(LDFLAGS) $(TARGET_STARTFILES) ${filter-out %.a,$^} -Wl,-\( ${filter %.a,$^} $(TARGET_LIBFILES) -Wl,-\) -o $@.elf
-#	echo >> contiki-$(TARGET).map
-#	$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
-#	$(OBJCOPY) $(OBJOPTS) $@.elf $@.bin 
+%.$(TARGET): %.co $(PROJECT_OBJECTFILES) $(PROJECT_LIBRARIES) contiki-$(TARGET).a 
+	$(LD) $(LDFLAGS) $(TARGET_STARTFILES) ${filter-out %.a,$^} -lc -Wl,-\( ${filter %.a,$^} $(TARGET_LIBFILES) -Wl,-\) -o $@.elf
+	echo >> contiki-$(TARGET).map
+	$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
+	$(OBJCOPY) $(OBJOPTS) $@.elf $@.bin 
 
 #$(OBJECTDIR)/%.o: %.s79
 #	$(AS) $(ASFLAGS) -o $@ $<
