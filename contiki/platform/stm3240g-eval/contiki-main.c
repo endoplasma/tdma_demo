@@ -114,7 +114,7 @@ int main (void) {                       /* Main Program                       */
 
   PRINTF("\r\nStarting ");
   PRINTF(CONTIKI_VERSION_STRING);
-  PRINTF(" on STM3240G-EVAL\r\n");
+  PRINTF(" on %s \r\n", PLATFORM_NAME);
 
 #ifdef __USE_LCD
   GLCD_Init();                          /* Initialize graphical LCD display   */
@@ -134,10 +134,10 @@ int main (void) {                       /* Main Program                       */
   /*
    * Initialize Contiki and our processes.
    */
-  
-#if WITH_SERIAL_LINE_INPUT
-  uart1_set_input(serial_line_input_byte);
-  serial_line_init();
+
+#ifdef WITH_SERIAL_LINE_INPUT
+  //  uart1_set_input(serial_line_input_byte);
+  // serial_line_init();
 #endif
 
   /* rtimer and ctimer should be initialized before radio duty cycling layers*/

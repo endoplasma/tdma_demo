@@ -1,11 +1,6 @@
 #ifndef __CONTIKI_CONF_H__
 #define __CONTIKI_CONF_H__
 
-/* Include Project Specific conf */
-#ifdef PROJECT_CONF_H
-#include "../../projects/rpl-border-router_Discovery/project-conf.h"
-#endif /* PROJECT_CONF_H */
-
 /* Platform name, type, and MCU clock rate */
 #define PLATFORM_NAME  "STM32F4-Discovery"
 #define PLATFORM_TYPE  STM32F4_Discovery
@@ -169,5 +164,11 @@ typedef unsigned int uip_stats_t;
 #define REL_SECT_PREFIX ".rel"
 
 #define CC_BYTE_ALIGNED __attribute__ ((packed, aligned(1)))
+
+/* Include Project Specific conf */
+#ifdef PROJECT_CONF_H
+#include PROJECT_CONF_H
+#endif /* PROJECT_CONF_H */
+
 
 #endif /* __CONTIKI_CONF_H__ */

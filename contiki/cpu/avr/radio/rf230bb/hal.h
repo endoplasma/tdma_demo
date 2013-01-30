@@ -555,6 +555,7 @@
     so that interrupts are enabled again.*/
 #define HAL_LEAVE_CRITICAL_REGION( ) { HAL_ENABLE_RADIO_INTERRUPT( ); HAL_ENABLE_OVERFLOW_INTERRUPT( ); }
 
+
 #else /* MULLE */
 
 #define HAL_ENABLE_RADIO_INTERRUPT( ) ( INT1IC.BYTE |= 1 )

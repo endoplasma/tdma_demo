@@ -43,12 +43,17 @@
 #include "contiki-conf.h"
 
 #include <string.h>
-#include "uart4.h"
-#include "usart3.h"
-//#include "GLCD.h"
-//#include "adc-sensor.h"
-#include "unique_id.h"
 
+#ifdef USE_SERIAL_LINE_USART3
+#include "usart3.h"
+#warning usart3 in use
+#endif /* USE_SERIAL_LINE_USART3 */
+
+#ifdef USE_SERIAL_LINE_UART4
+#include "uart4.h"
+#endif /* USE_SERIAL_LINE_UART4 */
+
+#include "unique_id.h"
 
 #include "dev/watchdog.h"
 #include "dev/leds.h"
@@ -109,28 +114,35 @@ int main (void) {                       /* Main Program                       */
   clock_init();
   
   /* Initialize serial communications */
-	USBD_Init(&USB_OTG_dev,	USB_OTG_FS_CORE_ID,	&USR_desc, &USBD_CDC_cb, &USR_cb);
+  USBD_Init(&USB_OTG_dev, USB_OTG_FS_CORE_ID, &USR_desc, &USBD_CDC_cb, &USR_cb);
 
-#if DISCOVERY
+#ifdef USE_SERIAL_LINE_USART3
 	usart3_init(115200);
-#if WITH_SERIAL_LINE_INPUT
-  usart3_set_input(serial_line_input_byte);
-  serial_line_init();
-#endif
-#else // most likely STM3240B-EVAL
+#if WITH_SERIAL_LINE_INPUT_USART3
+	usart3_set_input(serial_line_input_byte);
+	serial_line_init();
+#endif /* WITH_SERIAL_LINE_INPUT_USART3 */
+
+#else /* USE_SERIAL_LINE_USART3 */
+#ifdef USE_SERIAL_LINE_UART4
 	uart4_init(115200);
-#if WITH_SERIAL_LINE_INPUT
-  uart4_set_input(serial_line_input_byte);
-  serial_line_init();
-#endif
-#endif
+#if WITH_SERIAL_LINE_INPUT_USART4
+	uart4_set_input(serial_line_input_byte);
+	serial_line_init();
+#endif /* WITH_SERIAL_LINE_INPUT_USART3 */
+
+#else /* USE_SERIAL_LINE_UART4 */
+#warning No serial line defined
+#endif /* USE_SERIAL_LINE_UART4 */
+#endif /* USE_SERIAL_LINE_USART3 */
+
   
   // Led initialization
   leds_init();
 
   PRINTF("\r\nStarting ");
   PRINTF(CONTIKI_VERSION_STRING);
-  PRINTF(" on STM32F4-DISCOVERY\r\n");
+  PRINTF(" on %s \r\n", PLATFORM_NAME);
 
   /*
    * Initialize Contiki and our processes.

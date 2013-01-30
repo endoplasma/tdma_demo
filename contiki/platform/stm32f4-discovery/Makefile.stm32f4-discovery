@@ -10,9 +10,14 @@ endif
 
 CONTIKI_TARGET_SOURCEFILES += $(ARCH) $(CONTIKI_TARGET_MAIN)
 
+PLATFORM_DEFINES = \
+	HSE_VALUE="8000000" \
+	DISCOVERY="1" \
+#	USE_SERIAL_LINE_USART3 \
+#	WITH_SERIAL_LINE_INPUT_USART3 \
+
+# rf chip
+include $(CONTIKI)/cpu/avr/radio/rf230bb/Makefile.rf231
 
 MCU=STM32F407
 include $(CONTIKI)/cpu/stm32f407/Makefile.stm32f407
-
-# rf chip
-include $(CONTIKI)/cpu/avr/radio/rf230bb/Makefile.rf230bb

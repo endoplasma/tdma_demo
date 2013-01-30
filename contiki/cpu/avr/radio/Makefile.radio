@@ -1,3 +1,4 @@
+# -*- makefile -*-
 ### The RF230 "bare bones" driver uses the core MAC layer.
 ### It is required for versions after contiki 2.4 that use the new driver interfaces
 

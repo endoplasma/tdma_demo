@@ -1,0 +1,8 @@
+# -*- makefile -*-
+
+CFLAGS += -DIS_RF231=1 \
+	  -DRF231_HAS_PA=1 \
+
+CONTIKI_CPU_DIRS           += .
+CONTIKI_TARGET_SOURCEFILES += rf230bb.c halbb.c
+

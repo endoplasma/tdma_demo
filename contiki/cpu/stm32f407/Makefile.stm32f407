@@ -6,7 +6,7 @@
 CONTIKI_CPU=$(CONTIKI)/cpu/stm32f407
 
 ### Define the source directories and files
-CONTIKI_CPU_DIRS = . \
+CONTIKI_CPU_DIRS += . \
 		 VCP \
 		 CMSIS/Include/ \
 		 CMSIS/Device/ST/STM32F4xx/Include \
@@ -17,8 +17,14 @@ CONTIKI_CPU_DIRS = . \
 		 STM32_USB_OTG_Driver/inc \
 		 STM32_USB_OTG_Driver/src 
 
-RADIO_CHIP_DIR = $(CONTIKI)/cpu/avr/radio/rf230bb
+### put CPU specific defines that shall be used as compilerflags here
+CPU_DEFINES= \
+	__STM32F407__ \
 
+MY_DEFINES = $(CPU_DEFINES) $(PLATFORM_DEFINES) $(PROJECT_DEFINES)
+
+### Direcotry of the used radio chip
+RADIO_CHIP_DIR = $(CONTIKI)/cpu/avr/radio/rf230bb
 CONTIKI_CPU_DIRS += $(RADIO_CHIP_DIR)
 
 ## C Code Files
@@ -28,11 +34,13 @@ STM32F_C = clock.c nvic.c random.c system_stm32f4xx.c unique_id.c	\
 	   usbd_core.c usbd_ioreq.c usbd_req.c usbd_cdc_core.c		\
 	   vcp_putchar.c newlib_stubs.c
 
-ifdef USE_USART3
+
+### Include files in dependence of some Defines
+ifneq ($(findstring USE_SERIAL_LINE_USART3, $(MY_DEFINES)),)
 STM32F_C += usart3.c usart3-putchar.c
 endif
 
-ifdef USE_UART4
+ifneq ($(findstring USE_SERIAL_LINE_UART4, $(MY_DEFINES)),)
 STM32F_C += uart4.c uart4-putchar.c
 endif
 
@@ -40,8 +48,7 @@ ifdef USE_SLIP
 STM32F_C += slip_vcp.c slip.c
 endif
 
-
-## Assembler Files
+### Assembler Files
 STM32F_S = startup_stm32f4xx.s
 
 # .s and .s79 not specified here because in Makefile.include only .c and .S suffixes are replaced with .o.
@@ -63,6 +70,7 @@ AR       = $(GCC_NAME)ar
 OBJCOPY  = $(GCC_NAME)objcopy
 STRIP    = $(GCC_NAME)strip
 SIZE     = $(GCC_NAME)size
+
 ifndef DEBUG
 #OPTI = -Os -ffunction-sections 
 #elseif
@@ -73,31 +81,31 @@ endif #DEBUG
 CFLAGSNO = -mthumb \
 	   -mcpu=cortex-m4 \
 	   -g \
-	   -D __MICROLIB \
-	   -D __STM32F407__ \
-	   -D RF231_HAS_PA="1" \
-	   -D HSE_VALUE="8000000" \
-	   -D DISCOVERY="1" \
-	   -D AUTOSTART_ENABLE \
+	   -D__MICROLIB \
 
-CFLAGS  += $(CFLAGSNO) $(OPTI)
+CFLAGS  += $(CFLAGSNO) $(OPTI) $(addprefix -D, $(MY_DEFINES))
 
-ASFLAGS = -mthumb -mcpu=cortex-m3 -c -g -Wall -Os -ffunction-sections \
-	  -mlittle-endian -fshort-enums -x assembler-with-cpp \
-	  -Wa,-EL -lnosys
+ASFLAGS = -mthumb \
+	  -mcpu=cortex-m4 \
+	  -c \
+	  -g \
+	  -Wall \
+	  -Os \
+	  -ffunction-sections	\
+	  -mlittle-endian \
+	  -fshort-enums \
+	  -x assembler-with-cpp \
+	  -Wa,-EL \
 
 LDFLAGS += -mcpu=cortex-m4 \
 	   -mthumb  \
 	   -Wl,-T$(CONTIKI_CPU)/stm32_flash.ld \
 	   -u Default_Handler \
 	   -nostartfiles \
-	   -fno-exceptions -ffunction-sections -fdata-sections \
+	   -fno-exceptions \
+	   -ffunction-sections \
+	   -fdata-sections \
            -Wl,--gc-sections \
-
-ifndef ELF_LOADER
- # Do not use garbage collection when the elfloader is used.
-# LDFLAGS += -Wl,--gc-sections
-endif  #ELF_LOADER
 
 SIZEFLAGS = -A
 OBJOPTS = -O binary
@@ -106,23 +114,49 @@ OBJOPTS = -O binary
 
 OBJECTDIR = obj_$(TARGET)
 
+### add .s and .s79 files to the object list
 ssubst = ${patsubst %.s,%.o,${patsubst %.s79,%.o,$(1)}}
-
 CONTIKI_OBJECTFILES += ${addprefix $(OBJECTDIR)/,${call ssubst, $(STM32F_S)}}
 
+
+### expand the virtual path for .s files
 vpath %.s $(CONTIKI_CPU)/
 
 CUSTOM_RULE_LINK = 1
-#
 %.$(TARGET): %.co $(PROJECT_OBJECTFILES) $(PROJECT_LIBRARIES) contiki-$(TARGET).a 
-	$(LD) $(LDFLAGS) $(TARGET_STARTFILES) ${filter-out %.a,$^} -lc -Wl,-\( ${filter %.a,$^} $(TARGET_LIBFILES) -Wl,-\) -lc -o $@.elf
-	echo >> contiki-$(TARGET).map
-	$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
-	$(OBJCOPY) $(OBJOPTS) $@.elf $@.bin 
+	@echo Linking $@
+	@$(LD) $(LDFLAGS) $(TARGET_STARTFILES) ${filter-out %.a,$^} -lc -Wl,-\( ${filter %.a,$^} $(TARGET_LIBFILES) -Wl,-\) -lc -o $@.elf
 
-#$(OBJECTDIR)/%.o: %.s79
-#	$(AS) $(ASFLAGS) -o $@ $<
+%.map: %.$(TARGET)
+	@echo Creating $@.$(TARGET).map ..
+	@%.$(TARGET) echo >> contiki-$(TARGET).map
+	@$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
+
+%.bin: %.map
+	@echo Creating binary $@.bin ...
+	@$(OBJCOPY) $(OBJOPTS) $@.elf $@.bin 	
 
 $(OBJECTDIR)/%.o: %.s
-	$(AS) $(ASFLAGS) -o $@ $<	
+	@echo Assembling $< ...
+	@$(AS) $(ASFLAGS) -o $@ $<
 
+CUSTOM_RULE_C_TO_OBJECTDIR_O=1
+$(OBJECTDIR)/%.o: %.c
+	@echo Compiling Object $@ ...
+	@$(CC) $(CFLAGS) -MMD -c $< -o $@
+	@$(FINALIZE_DEPENDENCY)
+
+CUSTOM_RULE_ALLOBJS_TO_TARGETLIB=1
+contiki-$(TARGET).a: $(CONTIKI_OBJECTFILES)
+	@echo Combining Objects to $@ library ...
+	@$(AR) $(AROPTS) $@ $^
+
+CUSTOM_RULE_C_TO_CO=1
+%.co: %.c
+	@echo Compiling $@ ...
+	$(CC) $(CFLAGS) -c $< -o $@
+
+defines:
+	@echo Compiler Defines are:
+	@echo $(DEFINES)
+#	@echo $(CFLAGS)
