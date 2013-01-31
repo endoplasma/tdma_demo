@@ -1,110 +1,121 @@
-
 /*
  * newlib_stubs.c
  *
- *  Created on: 2 Nov 2010
- *      Author: nanoage.co.uk
+ *  Created on: 31 Jan 2013
+ *      Author: Philipp Spliethoff 
+ *        Mail: philipp.spliethoff@udo.edu
+ *
+ * This File implements systemcalls used by the Newlib C-Library. For
+ * more information look at:
+ * http://sourceware.org/newlib/libc.html#Syscalls
+ *
  */
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/times.h>
 #include <sys/unistd.h>
-//#include "stm32f4xx_usart.h"
 
 
-/*#ifndef STDOUT_USART
-#define STDOUT_USART 2
+#ifndef STDOUT_LINE
+#warning no STDOUT_LINE specified. Defaulting to USART3.
+#define STDOUT_LINE 3
 #endif
 
-#ifndef STDERR_USART
-#define STDERR_USART 2
+#ifndef STDERR_LINE
+#warning no STDERR_LINE specified. Defaulting to USART3.
+#define STDERR_LINE 3
 #endif
 
-#ifndef STDIN_USART
-#define STDIN_USART 2
+#ifndef STDIN_LINE
+#warning no STDIN_LINE specified. Defaulting to USART3.
+#define STDIN_LINE 3
 #endif
 
 #undef errno
 extern int errno;
-*/
+
+
 /*
- environ
- A pointer to a list of environment variables and their values. 
- For a minimal environment, this empty list is adequate:
+ * environ
+ * A pointer to a list of environment variables and their values. 
+ * For a minimal environment, this empty list is adequate:
  */
-/*char *__env[1] = { 0 };
-  char **environ = __env;*/
+char *__env[1] = { 0 };
+char **environ = __env;
 
-int _write(int file, char *ptr, int len);
-
-void _exit(int status) {
-  /*    _write(1, "exit", 4);
-    while (1) {
-        ;
-	}*/
-}
-
-int _close(int file) {
-    return -1;
-}
 /*
- execve
- Transfer control to a new process. Minimal implementation (for a system without processes):
+ *  Exit a program without cleaning up files. If your system doesn't
+ *  provide this, it is best to avoid linking with subroutines that
+ *  require it (exit, system).
+ */
+void _exit(int status) {
+}
+
+/*
+ * Close a File.
+ */
+int _close(int file) {
+  return -1;
+}
+
+/*
+ * Transfer control to a new process.
+ * 
  */
 int _execve(char *name, char **argv, char **env) {
-    errno = ENOMEM;
-    return -1;
+  errno = ENOMEM;
+  return -1;
 }
-/*
- fork
- Create a new process. Minimal implementation (for a system without processes):
- */
 
-int _fork() {
-    errno = EAGAIN;
-    return -1;
-}
+
 /*
- fstat
- Status of an open file. For consistency with other minimal implementations in these examples,
- all files are regarded as character special devices.
- The `sys/stat.h' header file required is distributed in the `include' subdirectory for this C library.
+ * Create a new process.
+ */
+int _fork() {
+  errno = EAGAIN;
+  return -1;
+}
+
+/*
+ * Status of an open file. For consistency with other minimal
+ * implementations in these examples, all files are regarded as
+ * character special devices.  The `sys/stat.h' header file required
+ * is distributed in the `include' subdirectory for this C library.
  */
 int _fstat(int file, struct stat *st) {
-  //    st->st_mode = S_IFCHR;
-    return 0;
+  st->st_mode = S_IFCHR;
+  return 0;
 }
 
 /*
- getpid
- Process-ID; this is sometimes used to generate strings unlikely to conflict with other processes. Minimal implementation, for a system without processes:
+ * Process-ID; this is sometimes used to generate strings unlikely to
+ * conflict with other processes. Minimal implementation, for a system
+ * without processes:
  */
-
 int _getpid() {
-    return 1;
+  return 1;
 }
 
 /*
- isatty
- Query whether output stream is a terminal. For consistency with the other minimal implementations,
+ * Query whether output stream is a terminal. 
+ *
+ * If file is one of STDOUT STDIN or STDERR we are on a tty. Return
+ * 1. otherwise return a bad filedescriptor error.
  */
 int _isatty(int file) {
-  /*    switch (file){
-    case STDOUT_FILENO:
-    case STDERR_FILENO:
-    case STDIN_FILENO:
-        return 1;
-    default:
-        //errno = ENOTTY;
-        errno = EBADF;
-        return 0;
-	}*/
+  switch (file){
+  case STDOUT_FILENO:
+  case STDERR_FILENO:
+  case STDIN_FILENO:
+    return 1;
+  default:
+    errno = EBADF;
+    return 0;
+  }
 }
 
-
 /*
- kill
- Send a signal. Minimal implementation:
+ * Send Kill_signal to a process. Not implemented
  */
 int _kill(int pid, int sig) {
     errno = EINVAL;
@@ -112,18 +123,15 @@ int _kill(int pid, int sig) {
 }
 
 /*
- link
- Establish a new name for an existing file. Minimal implementation:
+ * Establish a new name for an existing file. 
  */
-
 int _link(char *old, char *new) {
     errno = EMLINK;
     return -1;
 }
 
 /*
- lseek
- Set position in a file. Minimal implementation:
+ *  Set position in a file. Minimal implementation:
  */
 int _lseek(int file, int ptr, int dir) {
     return 0;
@@ -161,62 +169,56 @@ char * stack = (char*) __get_MSP();
 }
 
 /*
- read
- Read a character to a file. `libc' subroutines will use this system routine for input from all files, including stdin
- Returns -1 on error or blocks until the number of characters have been read.
+ * Read a character to a file. `libc' subroutines will use this system
+ * routine for input from all files, including stdin Returns -1 on
+ * error or blocks until the number of characters have been read.
+ * 
+ * not implemented
  */
-
-
 int _read(int file, char *ptr, int len) {
-  /*   int n;
-    int num = 0;
-    switch (file) {
-    case STDIN_FILENO:
-        for (n = 0; n < len; n++) {
-#if   STDIN_USART == 1
-            while ((USART1->SR & USART_FLAG_RXNE) == (uint16_t)RESET) {}
-            char c = (char)(USART1->DR & (uint16_t)0x01FF);
-#elif STDIN_USART == 2
-            while ((USART2->SR & USART_FLAG_RXNE) == (uint16_t) RESET) {}
-            char c = (char) (USART2->DR & (uint16_t) 0x01FF);
-#elif STDIN_USART == 3
-            while ((USART3->SR & USART_FLAG_RXNE) == (uint16_t)RESET) {}
-            char c = (char)(USART3->DR & (uint16_t)0x01FF);
-#endif
-            *ptr++ = c;
-            num++;
-        }
-        break;
-    default:
-        errno = EBADF;
-        return -1;
-	}*/
-    return 0;
+  /* int i; */
+/*   switch (file) { */
+/*   case STDIN_FILENO: */
+/*     for (i=0; i<len; i++) */
+/* #if   STDIN_LINE == 3 /\* USART3 *\/ */
+/*       usart3_writeb((unsigned char)ptr[i]); */
+/*     /\* call uart3 send buffer function *\/ */
+/* #warning TODO implement USART3 send buffer function */
+
+/* #elif STDIN_LINE == 4 /\* UART4 *\/ */
+/*     uart4_writeb((unsigned char)ptr[i]); */
+/*     #warning TODO implement UART4 send buffer function */
+
+/* #elif STDIN_LINE == 99 /\* USB *\/ */
+/*     #warning TODO implement USB send buffer function */
+/* #endif */
+    
+/*     break; */
+/*   default: */
+/*     /\* return an error for all other FD's *\/ */
+/*     errno = EBADF; */
+/*     return -1; */
+/*   } */
+  return 0;
 }
 
 /*
- stat
- Status of a file (by name). Minimal implementation:
- int    _EXFUN(stat,( const char *__path, struct stat *__sbuf ));
+ *  Status of a file (by name).
  */
-
 int _stat(const char *filepath, struct stat *st) {
     st->st_mode = S_IFCHR;
     return 0;
 }
 
 /*
- times
- Timing information for current process. Minimal implementation:
+ * Timing information for current process. Minimal implementation:
  */
-
 clock_t _times(struct tms *buf) {
     return -1;
 }
 
 /*
- unlink
- Remove a file's directory entry. Minimal implementation:
+ *  Remove a file's directory entry. Minimal implementation:
  */
 int _unlink(char *name) {
     errno = ENOENT;
@@ -224,8 +226,7 @@ int _unlink(char *name) {
 }
 
 /*
- wait
- Wait for a child process. Minimal implementation:
+ * Wait for a child process. Minimal implementation:
  */
 int _wait(int *status) {
     errno = ECHILD;
@@ -233,46 +234,63 @@ int _wait(int *status) {
 }
 
 /*
- write
- Write a character to a file. `libc' subroutines will use this system routine for output to all files, including stdout
- Returns -1 on error or number of bytes sent
+ * Write a character to a file. `libc' subroutines will use this
+ * system routine for output to all files, including stdout Returns -1
+ * on error or number of bytes sent
  */
 int _write(int file, char *ptr, int len) {
-  /*    int n;
-    switch (file) {
-    case STDOUT_FILENO: /*stdout*/
-  /*        for (n = 0; n < len; n++) {
-#if STDOUT_USART == 1
-            while ((USART1->SR & USART_FLAG_TC) == (uint16_t)RESET) {}
-            USART1->DR = (*ptr++ & (uint16_t)0x01FF);
-#elif  STDOUT_USART == 2
-            while ((USART2->SR & USART_FLAG_TC) == (uint16_t) RESET) {
-            }
-            USART2->DR = (*ptr++ & (uint16_t) 0x01FF);
-#elif  STDOUT_USART == 3
-            while ((USART3->SR & USART_FLAG_TC) == (uint16_t)RESET) {}
-            USART3->DR = (*ptr++ & (uint16_t)0x01FF);
+  int i;
+  switch (file) {
+    /*
+     * STDOUT
+     */
+  case STDOUT_FILENO: 
+#if STDOUT_LINE == 3 /* USART3 */
+    for (i = 0; i < len; i++) {
+      usart3_writeb((unsigned char)ptr[i]);
+    }
+#warning TODO implement usart3-send-buffer Function
+
+#elif STDOUT_LINE == 4 /* UART4 */
+    for (i = 0; i < len; i++) {
+      uart4_writeb((unsigned char)ptr[i]);
+    }
+#warning TODO implement uart4 send buffer function
+
+
+#elif STDOUT_LINE == 99 /* USB */
+#warning usb write not implemented
 #endif
-        }
+
         break;
-    case STDERR_FILENO: /* stderr */
-  /*        for (n = 0; n < len; n++) {
-#if STDERR_USART == 1
-            while ((USART1->SR & USART_FLAG_TC) == (uint16_t)RESET) {}
-            USART1->DR = (*ptr++ & (uint16_t)0x01FF);
-#elif  STDERR_USART == 2
-            while ((USART2->SR & USART_FLAG_TC) == (uint16_t) RESET) {
-            }
-            USART2->DR = (*ptr++ & (uint16_t) 0x01FF);
-#elif  STDERR_USART == 3
-            while ((USART3->SR & USART_FLAG_TC) == (uint16_t)RESET) {}
-            USART3->DR = (*ptr++ & (uint16_t)0x01FF);
+
+	/*
+	 * STDERR
+	 */
+	case STDERR_FILENO: /* stderr */
+
+#if STDERR_LINE == 3 /* USART3 */
+    for (i = 0; i < len; i++) {
+      usart3_writeb((unsigned char)ptr[i]);
+    }
+#warning TODO implement usart3-send-buffer Function
+
+#elif STDERR_LINE == 4 /* UART4 */
+    for (i = 0; i < len; i++) {
+      uart4_writeb((unsigned char)ptr[i]);
+    }
+#warning TODO implement uart4 send buffer function
+
+
+#elif STDERR_LINE == 99 /* USB */
+#warning USB wirte not implemente
 #endif
-        }
+
+
         break;
     default:
         errno = EBADF;
         return -1;
-    }*/
-    return -1;
+    }
+    return 0;
 }

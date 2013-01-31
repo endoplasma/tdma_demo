@@ -120,6 +120,7 @@ output(void)
 }
 
 /*---------------------------------------------------------------------------*/
+#if 0
 #undef putchar
 int
 putchar(int c)
@@ -147,6 +148,7 @@ putchar(int c)
   }
   return c;
 }
+#endif
 /*---------------------------------------------------------------------------*/
 const struct uip_fallback_interface rpl_interface = {
   init, output

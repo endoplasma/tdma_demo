@@ -29,24 +29,28 @@ CONTIKI_CPU_DIRS += $(RADIO_CHIP_DIR)
 
 ## C Code Files
 STM32F_C = clock.c nvic.c random.c system_stm32f4xx.c unique_id.c	\
-	   watchdog.c rtimer-arch.c usb_bsp.c usbd_cdc_vcp.c		\
-	   usbd_desc.c usbd_usr.c usb_core.c usb_dcd.c usb_dcd_int.c	\
-	   usbd_core.c usbd_ioreq.c usbd_req.c usbd_cdc_core.c		\
-	   vcp_putchar.c newlib_stubs.c
+	   watchdog.c rtimer-arch.c newlib_stubs.c
 
 
 ### Include files in dependence of some Defines
-ifneq ($(findstring USE_SERIAL_LINE_USART3, $(MY_DEFINES)),)
-STM32F_C += usart3.c usart3-putchar.c
+ifneq ($(findstring USE_USART3, $(MY_DEFINES)),)
+STM32F_C += usart3.c 
 endif
 
-ifneq ($(findstring USE_SERIAL_LINE_UART4, $(MY_DEFINES)),)
-STM32F_C += uart4.c uart4-putchar.c
+ifneq ($(findstring USE_UART4, $(MY_DEFINES)),)
+STM32F_C += uart4.c 
+endif
+
+ifneq ($(findstring USE_USB, $(MY_DEFINES)),)
+STM32F_C += usb_bsp.c usbd_cdc_vcp.c usbd_desc.c usbd_usr.c		\
+	   usb_core.c usb_dcd.c usb_dcd_int.c usbd_core.c		\
+	   usbd_ioreq.c usbd_req.c usbd_cdc_core.c
 endif
 
 ifdef USE_SLIP
 STM32F_C += slip_vcp.c slip.c
 endif
+
 
 ### Assembler Files
 STM32F_S = startup_stm32f4xx.s

@@ -67,6 +67,7 @@ void usart3_set_input(int (*input)(unsigned char c)) {
   usart3_input_handler = input;
 }
 
+
 void usart3_writeb(unsigned char c) {
 //  watchdog_periodic();
   /* Put the outgoing byte on the transmission buffer. If the buffer
@@ -82,6 +83,11 @@ void usart3_writeb(unsigned char c) {
     USART3->CR1 |= USART_CR1_TXEIE;		/* enable TX register empty int */
   }
 }
+
+void usart3_writebuff(unsigned char* buf, int len) {
+  /* check if we want to write more data than the ringbuf can store. */
+}
+
 
 /*---------------------------------------------------------------------------*/
 #if ! WITH_UIP /* If WITH_UIP is defined, putchar() is defined by the SLIP driver */
