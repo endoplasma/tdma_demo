@@ -6,7 +6,7 @@
  *        Mail: philipp.spliethoff@udo.edu
  *
  * This File implements systemcalls used by the Newlib C-Library. For
- * more information look at:
+ * further information look at:
  * http://sourceware.org/newlib/libc.html#Syscalls
  *
  */
@@ -15,6 +15,9 @@
 #include <sys/times.h>
 #include <sys/unistd.h>
 
+#ifdef USE_USB
+extern CDC_IF_Prop_TypeDef  APP_FOPS;
+#endif /* USE_USB */
 
 #ifndef STDOUT_LINE
 #warning no STDOUT_LINE specified. Defaulting to USART3.
@@ -169,7 +172,7 @@ char * stack = (char*) __get_MSP();
 }
 
 /*
- * Read a character to a file. `libc' subroutines will use this system
+ * Read a character from a file. `libc' subroutines will use this system
  * routine for input from all files, including stdin Returns -1 on
  * error or blocks until the number of characters have been read.
  * 
@@ -239,12 +242,18 @@ int _wait(int *status) {
  * on error or number of bytes sent
  */
 int _write(int file, char *ptr, int len) {
+
+#ifdef USE_USB
+  uint8_t* u8ptr = (uint8_t*)ptr;
+#endif /* USE_USB */
+
   int i;
   switch (file) {
     /*
      * STDOUT
      */
   case STDOUT_FILENO: 
+
 #if STDOUT_LINE == 3 /* USART3 */
     for (i = 0; i < len; i++) {
       usart3_writeb((unsigned char)ptr[i]);
@@ -259,7 +268,7 @@ int _write(int file, char *ptr, int len) {
 
 
 #elif STDOUT_LINE == 99 /* USB */
-#warning usb write not implemented
+    APP_FOPS.pIf_DataTx(u8ptr, len);
 #endif
 
         break;
@@ -283,6 +292,7 @@ int _write(int file, char *ptr, int len) {
 
 
 #elif STDERR_LINE == 99 /* USB */
+    APP_FOPS.pIf_DataTx(u8ptr, len);
 #warning USB wirte not implemente
 #endif
 
