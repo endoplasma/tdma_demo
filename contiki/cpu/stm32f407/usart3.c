@@ -100,12 +100,12 @@ void usart3_writebuff(unsigned char* buf, int len) {
 #else
     if ((DMA1_Stream3->CR & DMA_SxCR_EN ) != DMA_SxCR_EN ) {
       /* set the start address of your data */      
-      DMA1_Stream3->M0AR = (uint32_t) txbuf->data + txbuf->get_ptr;
+      DMA1_Stream3->M0AR = (uint32_t) txbuf.data + txbuf.get_ptr;
 
       /* set the length of your data */ 
-      DMA1_Stream3->NDTR = (txbuf->put_ptr - txbuf->get_ptr) & txbuf->mask;
-      if (DMA1_Stream3->NDTR > (txbuf->mask + 1 - txbuf->get_ptr)) {
-	DMA1_Stream3->NDTR = txbuf->mask + 1 - txbuf->get_ptr;
+      DMA1_Stream3->NDTR = (txbuf.put_ptr - txbuf.get_ptr) & txbuf.mask;
+      if (DMA1_Stream3->NDTR > (txbuf.mask + 1 - txbuf.get_ptr)) {
+	DMA1_Stream3->NDTR = txbuf.mask + 1 - txbuf.get_ptr;
       }
 
       /* Enable transfer by setting EN bit */
@@ -146,7 +146,8 @@ void usart3_init(unsigned long ubr)
   /*********************************************************************************
    * DMA Configuration
    *********************************************************************************/
-  RCC->AHB1ENR |= RCC_AHB1_SPI_DMAx; /* enable DMA clock */
+  uint32_t tmpreg;
+  RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN; /* enable DMA clock */
 
   /* Get the configuration register from DMA1_Stream3 */
   tmpreg = DMA1_Stream3->CR;
@@ -177,7 +178,7 @@ void usart3_init(unsigned long ubr)
   DMA1_Stream3->PAR = USART3_BASE + 0x04;
 
   /* Enable UART DMA mode */
-  USART3->CR3 &= DMAT;
+  USART3->CR3 &= USART_CR3_DMAT;
 
   IRQ_init_enable(DMA1_Stream3_IRQn,0,0);
 #endif
@@ -214,19 +215,20 @@ void USART3_IRQHandler(void)
 }
 
 
+#ifdef USART3_TX_USE_DMA1_CH4
  void DMA1_Stream3_IRQHandler(void) {
    /* Clear Transfer Complete Interrupt Flag */
    DMA1->LIFCR |= DMA_LIFCR_CTCIF3;
    
-   txbuf->get_ptr = (DMA1_Stream3->M0AR - txbuf->data) & txbuf->mask;
-   if (((r->put_ptr - r->get_ptr) & r->mask ) > 0 ) {
+   txbuf.get_ptr = (DMA1_Stream3->M0AR - (uint8_t) txbuf.data) & txbuf.mask;
+   if (((txbuf.put_ptr - txbuf.get_ptr) & txbuf.mask ) > 0 ) {
      /* set the start address of your data */      
-     DMA1_Stream3->M0AR = (uint32_t) txbuf->data + txbuf->get_ptr;
+     DMA1_Stream3->M0AR = (uint32_t) txbuf.data + txbuf.get_ptr;
 
      /* set the length of your data */ 
-     DMA1_Stream3->NDTR = (txbuf->put_ptr - txbuf->get_ptr) & txbuf->mask;
-     if (DMA1_Stream3->NDTR > (txbuf->mask + 1 - txbuf->get_ptr)) {
-       DMA1_Stream3->NDTR = txbuf->mask + 1 - txbuf->get_ptr;
+     DMA1_Stream3->NDTR = (txbuf.put_ptr - txbuf.get_ptr) & txbuf.mask;
+     if (DMA1_Stream3->NDTR > (txbuf.mask + 1 - txbuf.get_ptr)) {
+       DMA1_Stream3->NDTR = txbuf.mask + 1 - txbuf.get_ptr;
      }
 
      /* Enable transfer by setting EN bit */
@@ -234,3 +236,4 @@ void USART3_IRQHandler(void)
    }
 
  }
+#endif /* USART3_TX_USE_DMA1_CH4 */

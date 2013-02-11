@@ -21,6 +21,8 @@ CONTIKI_CPU_DIRS += . \
 CPU_DEFINES= \
 	__STM32F407__ \
 
+#	USART3_TX_USE_DMA1_CH4 \
+
 MY_DEFINES = $(CPU_DEFINES) $(PLATFORM_DEFINES) $(PROJECT_DEFINES)
 
 ### Direcotry of the used radio chip
@@ -85,7 +87,7 @@ endif #DEBUG
 CFLAGSNO = -mthumb \
 	   -mcpu=cortex-m4 \
 	   -g \
-	   -D__MICROLIB \
+	   -D __MICROLIB \
 
 CFLAGS  += $(CFLAGSNO) $(OPTI) $(addprefix -D, $(MY_DEFINES))
 

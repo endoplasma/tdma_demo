@@ -44,14 +44,15 @@
 
 #include <string.h>
 
-#ifdef USE_SERIAL_LINE_USART3
+#ifdef USE_USART3
 #include "usart3.h"
 #warning usart3 in use
-#endif /* USE_SERIAL_LINE_USART3 */
+#endif /* USE_USART3 */
 
-#ifdef USE_SERIAL_LINE_UART4
+#ifdef USE_UART4
 #include "uart4.h"
-#endif /* USE_SERIAL_LINE_UART4 */
+#warning uart4 in use
+#endif /* USE_UART4 */
 
 #include "unique_id.h"
 
@@ -113,28 +114,30 @@ int main (void) {                       /* Main Program                       */
   /* Initialize hardware. */
   clock_init();
   
+#ifdef USE_USB
   /* Initialize serial communications */
   USBD_Init(&USB_OTG_dev, USB_OTG_FS_CORE_ID, &USR_desc, &USBD_CDC_cb, &USR_cb);
+#endif /* USE_USB */
 
-#ifdef USE_SERIAL_LINE_USART3
+#ifdef USE_USART3
 	usart3_init(115200);
-#if WITH_SERIAL_LINE_INPUT_USART3
+#if USART3_INPUT
 	usart3_set_input(serial_line_input_byte);
 	serial_line_init();
-#endif /* WITH_SERIAL_LINE_INPUT_USART3 */
+#endif /* USART3_INPUT */
 
-#else /* USE_SERIAL_LINE_USART3 */
-#ifdef USE_SERIAL_LINE_UART4
+#else /* USE_USART3 */
+#ifdef USE_UART4
 	uart4_init(115200);
-#if WITH_SERIAL_LINE_INPUT_USART4
+#if USART4_INPUT
 	uart4_set_input(serial_line_input_byte);
 	serial_line_init();
-#endif /* WITH_SERIAL_LINE_INPUT_USART3 */
+#endif /* USART4_INPUT */
 
-#else /* USE_SERIAL_LINE_UART4 */
+#else /* USE_UART4 */
 #warning No serial line defined
-#endif /* USE_SERIAL_LINE_UART4 */
-#endif /* USE_SERIAL_LINE_USART3 */
+#endif /* USE_UART4 */
+#endif /* USE_USART3 */
 
   
   // Led initialization

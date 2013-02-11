@@ -16,6 +16,8 @@
 #include <sys/unistd.h>
 
 #ifdef USE_USB
+#include "usbd_cdc_core.h"
+
 extern CDC_IF_Prop_TypeDef  APP_FOPS;
 #endif /* USE_USB */
 
@@ -43,8 +45,8 @@ extern int errno;
  * A pointer to a list of environment variables and their values. 
  * For a minimal environment, this empty list is adequate:
  */
-char *__env[1] = { 0 };
-char **environ = __env;
+// char *__env[1] = { 0 };
+// char **environ = __env;
 
 /*
  *  Exit a program without cleaning up files. If your system doesn't
@@ -243,64 +245,64 @@ int _wait(int *status) {
  */
 int _write(int file, char *ptr, int len) {
 
-#ifdef USE_USB
-  uint8_t* u8ptr = (uint8_t*)ptr;
-#endif /* USE_USB */
+/* #ifdef USE_USB */
+/*   uint8_t* u8ptr = (uint8_t*)ptr; */
+/* #endif /\* USE_USB *\/ */
 
-  int i;
-  switch (file) {
-    /*
-     * STDOUT
-     */
-  case STDOUT_FILENO: 
+/*   int i; */
+/*   switch (file) { */
+/*     /\* */
+/*      * STDOUT */
+/*      *\/ */
+/*   case STDOUT_FILENO:  */
 
-#if STDOUT_LINE == 3 /* USART3 */
-    for (i = 0; i < len; i++) {
-      usart3_writeb((unsigned char)ptr[i]);
-    }
-#warning TODO implement usart3-send-buffer Function
+/* #if STDOUT_LINE == 3 /\* USART3 *\/ */
+/*     for (i = 0; i < len; i++) { */
+/*       usart3_writeb((unsigned char)ptr[i]); */
+/*     } */
+/* #warning TODO implement usart3-send-buffer Function */
 
-#elif STDOUT_LINE == 4 /* UART4 */
-    for (i = 0; i < len; i++) {
-      uart4_writeb((unsigned char)ptr[i]);
-    }
-#warning TODO implement uart4 send buffer function
-
-
-#elif STDOUT_LINE == 99 /* USB */
-    APP_FOPS.pIf_DataTx(u8ptr, len);
-#endif
-
-        break;
-
-	/*
-	 * STDERR
-	 */
-	case STDERR_FILENO: /* stderr */
-
-#if STDERR_LINE == 3 /* USART3 */
-    for (i = 0; i < len; i++) {
-      usart3_writeb((unsigned char)ptr[i]);
-    }
-#warning TODO implement usart3-send-buffer Function
-
-#elif STDERR_LINE == 4 /* UART4 */
-    for (i = 0; i < len; i++) {
-      uart4_writeb((unsigned char)ptr[i]);
-    }
-#warning TODO implement uart4 send buffer function
+/* #elif STDOUT_LINE == 4 /\* UART4 *\/ */
+/*     for (i = 0; i < len; i++) { */
+/*       uart4_writeb((unsigned char)ptr[i]); */
+/*     } */
+/* #warning TODO implement uart4 send buffer function */
 
 
-#elif STDERR_LINE == 99 /* USB */
-    APP_FOPS.pIf_DataTx(u8ptr, len);
-#warning USB wirte not implemente
-#endif
+/* #elif STDOUT_LINE == 99 /\* USB *\/ */
+/*     APP_FOPS.pIf_DataTx(u8ptr, len); */
+/* #endif */
+
+/*         break; */
+
+/* 	/\* */
+/* 	 * STDERR */
+/* 	 *\/ */
+/* 	case STDERR_FILENO: /\* stderr *\/ */
+
+/* #if STDERR_LINE == 3 /\* USART3 *\/ */
+/*     for (i = 0; i < len; i++) { */
+/*       usart3_writeb((unsigned char)ptr[i]); */
+/*     } */
+/* #warning TODO implement usart3-send-buffer Function */
+
+/* #elif STDERR_LINE == 4 /\* UART4 *\/ */
+/*     for (i = 0; i < len; i++) { */
+/*       uart4_writeb((unsigned char)ptr[i]); */
+/*     } */
+/* #warning TODO implement uart4 send buffer function */
 
 
-        break;
-    default:
-        errno = EBADF;
-        return -1;
-    }
+/* #elif STDERR_LINE == 99 /\* USB *\/ */
+/*     APP_FOPS.pIf_DataTx(u8ptr, len); */
+/* #warning USB wirte not implemente */
+/* #endif */
+
+
+/*         break; */
+/*     default: */
+/*         errno = EBADF; */
+/*         return -1; */
+/*     } */
     return 0;
 }

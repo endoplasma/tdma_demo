@@ -18,7 +18,7 @@ PLATFORM_DEFINES = \
 	STDOUT_LINE=3 \
 	STDIN_LINE=3 \
 	STDERR_LINE=3 \
-	USE_USB \
+#	USE_USB \
 
 
 # rf chip

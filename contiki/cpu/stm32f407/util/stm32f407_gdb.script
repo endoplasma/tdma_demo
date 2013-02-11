@@ -28,7 +28,7 @@ monitor poll
 monitor flash probe 0
 monitor flash protect 0 0 11 off
 monitor reset halt
-monitor flash write_image /home/psp/Source/BA_contiki/contiki/projects/udpPlug_Discovery/udpPlug.stm32f4-discovery.elf 
+monitor flash write_image /home/psp/Source/BA_contiki/contiki/projects/udpPlug/udpPlug.stm32f4-discovery.elf 
 monitor flash protect 0 0 11 on
 monitor reset halt
 break main
