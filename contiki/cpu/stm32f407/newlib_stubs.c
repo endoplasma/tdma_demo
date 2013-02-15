@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <sys/times.h>
 #include <sys/unistd.h>
+#include "stm32f4xx.h"
 
 #ifdef USE_USB
 #include "usbd_cdc_core.h"
@@ -45,8 +46,8 @@ extern int errno;
  * A pointer to a list of environment variables and their values. 
  * For a minimal environment, this empty list is adequate:
  */
-// char *__env[1] = { 0 };
-// char **environ = __env;
+char *__env[1] = { 0 };
+char **environ = __env;
 
 /*
  *  Exit a program without cleaning up files. If your system doesn't
@@ -123,54 +124,52 @@ int _isatty(int file) {
  * Send Kill_signal to a process. Not implemented
  */
 int _kill(int pid, int sig) {
-    errno = EINVAL;
-    return (-1);
+  errno = EINVAL;
+  return (-1);
 }
 
 /*
  * Establish a new name for an existing file. 
  */
 int _link(char *old, char *new) {
-    errno = EMLINK;
-    return -1;
+  errno = EMLINK;
+  return -1;
 }
 
 /*
  *  Set position in a file. Minimal implementation:
  */
 int _lseek(int file, int ptr, int dir) {
-    return 0;
+  return 0;
 }
 
 /*
- sbrk
- Increase program data space.
- Malloc and related functions depend on this
- */
+  sbrk
+  Increase program data space.
+  Malloc and related functions depend on this
+*/
 caddr_t _sbrk(int incr) {
 
-  /*    extern char _ebss; // Defined by the linker
-    static char *heap_end;
-    char *prev_heap_end;
+  extern char _ebss; // Defined by the linker
+  static char *heap_end;
+  char *prev_heap_end;
 
-    if (heap_end == 0) {
-        heap_end = &_ebss;
+  if (heap_end == 0) {
+    heap_end = &_ebss;
+  }
+  prev_heap_end = heap_end;
+
+  char * stack = (char*) __get_MSP();
+  if (heap_end + incr >  stack)
+    {
+      _write (STDERR_FILENO, "Heap and stack collision\n", 25);
+      errno = ENOMEM;
+      return  (caddr_t) -1;
+      //abort ();
     }
-    prev_heap_end = heap_end;
 
-char * stack = (char*) __get_MSP();
-     if (heap_end + incr >  stack)
-     {
-         _write (STDERR_FILENO, "Heap and stack collision\n", 25);
-         errno = ENOMEM;
-         return  (caddr_t) -1;
-         //abort ();
-     }
-
-    heap_end += incr;
-    return (caddr_t) prev_heap_end;
-  */
-  return 0;
+  heap_end += incr;
+  return (caddr_t) prev_heap_end;
 }
 
 /*
@@ -182,28 +181,28 @@ char * stack = (char*) __get_MSP();
  */
 int _read(int file, char *ptr, int len) {
   /* int i; */
-/*   switch (file) { */
-/*   case STDIN_FILENO: */
-/*     for (i=0; i<len; i++) */
-/* #if   STDIN_LINE == 3 /\* USART3 *\/ */
-/*       usart3_writeb((unsigned char)ptr[i]); */
-/*     /\* call uart3 send buffer function *\/ */
-/* #warning TODO implement USART3 send buffer function */
+  /*   switch (file) { */
+  /*   case STDIN_FILENO: */
+  /*     for (i=0; i<len; i++) */
+  /* #if   STDIN_LINE == 3 /\* USART3 *\/ */
+  /*       usart3_writeb((unsigned char)ptr[i]); */
+  /*     /\* call uart3 send buffer function *\/ */
+  /* #warning TODO implement USART3 send buffer function */
 
-/* #elif STDIN_LINE == 4 /\* UART4 *\/ */
-/*     uart4_writeb((unsigned char)ptr[i]); */
-/*     #warning TODO implement UART4 send buffer function */
+  /* #elif STDIN_LINE == 4 /\* UART4 *\/ */
+  /*     uart4_writeb((unsigned char)ptr[i]); */
+  /*     #warning TODO implement UART4 send buffer function */
 
-/* #elif STDIN_LINE == 99 /\* USB *\/ */
-/*     #warning TODO implement USB send buffer function */
-/* #endif */
+  /* #elif STDIN_LINE == 99 /\* USB *\/ */
+  /*     #warning TODO implement USB send buffer function */
+  /* #endif */
     
-/*     break; */
-/*   default: */
-/*     /\* return an error for all other FD's *\/ */
-/*     errno = EBADF; */
-/*     return -1; */
-/*   } */
+  /*     break; */
+  /*   default: */
+  /*     /\* return an error for all other FD's *\/ */
+  /*     errno = EBADF; */
+  /*     return -1; */
+  /*   } */
   return 0;
 }
 
@@ -211,31 +210,31 @@ int _read(int file, char *ptr, int len) {
  *  Status of a file (by name).
  */
 int _stat(const char *filepath, struct stat *st) {
-    st->st_mode = S_IFCHR;
-    return 0;
+  st->st_mode = S_IFCHR;
+  return 0;
 }
 
 /*
  * Timing information for current process. Minimal implementation:
  */
 clock_t _times(struct tms *buf) {
-    return -1;
+  return -1;
 }
 
 /*
  *  Remove a file's directory entry. Minimal implementation:
  */
 int _unlink(char *name) {
-    errno = ENOENT;
-    return -1;
+  errno = ENOENT;
+  return -1;
 }
 
 /*
  * Wait for a child process. Minimal implementation:
  */
 int _wait(int *status) {
-    errno = ECHILD;
-    return -1;
+  errno = ECHILD;
+  return -1;
 }
 
 /*
@@ -245,64 +244,65 @@ int _wait(int *status) {
  */
 int _write(int file, char *ptr, int len) {
 
-/* #ifdef USE_USB */
-/*   uint8_t* u8ptr = (uint8_t*)ptr; */
-/* #endif /\* USE_USB *\/ */
+#ifdef USE_USB
+  uint8_t* u8ptr = (uint8_t*)ptr;
+#endif /* USE_USB */
 
-/*   int i; */
-/*   switch (file) { */
-/*     /\* */
-/*      * STDOUT */
-/*      *\/ */
-/*   case STDOUT_FILENO:  */
+  int i;
+  switch (file) {
+    /*
+     * STDOUT
+     */
+  case STDOUT_FILENO:
 
-/* #if STDOUT_LINE == 3 /\* USART3 *\/ */
-/*     for (i = 0; i < len; i++) { */
-/*       usart3_writeb((unsigned char)ptr[i]); */
-/*     } */
-/* #warning TODO implement usart3-send-buffer Function */
+#if STDOUT_LINE == 3 /* USART3 */
+//    for (i = 0; i < len; i++) {
+//      usart3_writeb((unsigned char)ptr[i]);
+    	usart3_writebuff(ptr,len);
+//    }
+#warning TODO implement usart3-send-buffer Function
 
-/* #elif STDOUT_LINE == 4 /\* UART4 *\/ */
-/*     for (i = 0; i < len; i++) { */
-/*       uart4_writeb((unsigned char)ptr[i]); */
-/*     } */
-/* #warning TODO implement uart4 send buffer function */
-
-
-/* #elif STDOUT_LINE == 99 /\* USB *\/ */
-/*     APP_FOPS.pIf_DataTx(u8ptr, len); */
-/* #endif */
-
-/*         break; */
-
-/* 	/\* */
-/* 	 * STDERR */
-/* 	 *\/ */
-/* 	case STDERR_FILENO: /\* stderr *\/ */
-
-/* #if STDERR_LINE == 3 /\* USART3 *\/ */
-/*     for (i = 0; i < len; i++) { */
-/*       usart3_writeb((unsigned char)ptr[i]); */
-/*     } */
-/* #warning TODO implement usart3-send-buffer Function */
-
-/* #elif STDERR_LINE == 4 /\* UART4 *\/ */
-/*     for (i = 0; i < len; i++) { */
-/*       uart4_writeb((unsigned char)ptr[i]); */
-/*     } */
-/* #warning TODO implement uart4 send buffer function */
+#elif STDOUT_LINE == 4 /* UART4 */
+    for (i = 0; i < len; i++) {
+      uart4_writeb((unsigned char)ptr[i]);
+    }
+#warning TODO implement uart4 send buffer function
 
 
-/* #elif STDERR_LINE == 99 /\* USB *\/ */
-/*     APP_FOPS.pIf_DataTx(u8ptr, len); */
-/* #warning USB wirte not implemente */
-/* #endif */
+#elif STDOUT_LINE == 99 /* USB */
+    APP_FOPS.pIf_DataTx(u8ptr, len);
+#endif
+
+    break;
+
+    /*
+     * STDERR
+     */
+  case STDERR_FILENO: /* stderr */
+
+#if STDERR_LINE == 3 /* USART3 */
+    for (i = 0; i < len; i++) {
+      usart3_writeb((unsigned char)ptr[i]);
+    }
+#warning TODO implement usart3-send-buffer Function
+
+#elif STDERR_LINE == 4 /* UART4 */
+    for (i = 0; i < len; i++) {
+      uart4_writeb((unsigned char)ptr[i]);
+    }
+#warning TODO implement uart4 send buffer function
 
 
-/*         break; */
-/*     default: */
-/*         errno = EBADF; */
-/*         return -1; */
-/*     } */
-    return 0;
+#elif STDERR_LINE == 99 /* USB */
+    APP_FOPS.pIf_DataTx(u8ptr, len);
+#warning USB wirte not implemente
+#endif
+
+
+    break;
+  default:
+    errno = EBADF;
+    return -1;
+  }
+  return 0;
 }

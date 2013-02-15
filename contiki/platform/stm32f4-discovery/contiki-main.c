@@ -143,6 +143,23 @@ int main (void) {                       /* Main Program                       */
   // Led initialization
   leds_init();
 
+#define delay_us( us )   ( clock_delay_usec( us ) )
+  PRINTF("0123456789abcdef0123456789ab\r\n");
+  delay_us(20000);
+  PRINTF("0123456789abcdef0123456789abc\r\n");
+  delay_us(20000);
+  PRINTF("0123456789abcdef0123456789abcd\r\n");
+  delay_us(20000);
+  PRINTF("0123456789abcdef0123456789abcde\r\n");
+  delay_us(20000);
+  PRINTF("0123456789abcdef0123456789abcdef\r\n");
+  delay_us(20000);
+  PRINTF("0123456789abcdef0123456789\r\n");
+  PRINTF("abcdef0123456789abcdef\r\n");
+
+  PRINTF("Number of DMA IRQ: %u\r\n", DMA_irq_count);
+
+
   PRINTF("\r\nStarting ");
   PRINTF(CONTIKI_VERSION_STRING);
   PRINTF(" on %s \r\n", PLATFORM_NAME);

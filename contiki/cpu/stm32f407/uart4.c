@@ -57,7 +57,7 @@ static volatile uint8_t transmitting;
 #ifdef UART4_CONF_TX_BUFSIZE
 #define UART4_TX_BUFSIZE UART4_CONF_TX_BUFSIZE
 #else /* UART4_CONF_TX_BUFSIZE */
-#define UART4_TX_BUFSIZE 64
+#define UART4_TX_BUFSIZE 128
 #endif /* UART4_CONF_TX_BUFSIZE */
 
 static struct ringbuf txbuf;

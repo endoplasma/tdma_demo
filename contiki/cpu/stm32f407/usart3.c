@@ -57,11 +57,14 @@ static volatile uint8_t transmitting;
 #ifdef USART3_CONF_TX_BUFSIZE
 #define USART3_TX_BUFSIZE USART3_CONF_TX_BUFSIZE
 #else /* USART3_CONF_TX_BUFSIZE */
-#define USART3_TX_BUFSIZE 128
+#define USART3_TX_BUFSIZE 32
 #endif /* USART3_CONF_TX_BUFSIZE */
 
 static struct ringbuf txbuf;
 static uint8_t txbuf_data[USART3_TX_BUFSIZE];
+
+volatile uint16_t dma_length;
+uint32_t DMA_irq_count = 0;
 
 void usart3_set_input(int (*input)(unsigned char c)) {
   usart3_input_handler = input;
@@ -105,9 +108,9 @@ void usart3_writebuff(unsigned char* buf, int len) {
       /* set the length of your data */ 
       DMA1_Stream3->NDTR = (txbuf.put_ptr - txbuf.get_ptr) & txbuf.mask;
       if (DMA1_Stream3->NDTR > (txbuf.mask + 1 - txbuf.get_ptr)) {
-	DMA1_Stream3->NDTR = txbuf.mask + 1 - txbuf.get_ptr;
+    	  DMA1_Stream3->NDTR = txbuf.mask + 1 - txbuf.get_ptr;
       }
-
+      dma_length = DMA1_Stream3->NDTR;
       /* Enable transfer by setting EN bit */
       DMA1_Stream3->CR |= DMA_SxCR_EN;
     }
@@ -143,7 +146,7 @@ void usart3_init(unsigned long ubr)
 #ifdef USART3_TX_USE_DMA1_CH4
 #warning DMA1 stream3 channel4 is used by USART3 for transmission!
 
-  /*********************************************************************************
+   /*********************************************************************************
    * DMA Configuration
    *********************************************************************************/
   uint32_t tmpreg;
@@ -178,15 +181,14 @@ void usart3_init(unsigned long ubr)
   DMA1_Stream3->PAR = USART3_BASE + 0x04;
 
   /* Enable UART DMA mode */
-  USART3->CR3 &= USART_CR3_DMAT;
-
+  USART3->CR3 |= USART_CR3_DMAT;
+  DMA1_Stream3->CR |= DMA_SxCR_TCIE;
   IRQ_init_enable(DMA1_Stream3_IRQn,0,0);
 #endif
  
   transmitting = 0;
   
   ringbuf_init(&txbuf, txbuf_data, sizeof(txbuf_data));  
-    
   IRQ_init_enable(USART3_IRQn, 0, 0);
 }
 
@@ -220,7 +222,8 @@ void USART3_IRQHandler(void)
    /* Clear Transfer Complete Interrupt Flag */
    DMA1->LIFCR |= DMA_LIFCR_CTCIF3;
    
-   txbuf.get_ptr = (DMA1_Stream3->M0AR - (uint8_t) txbuf.data) & txbuf.mask;
+   txbuf.get_ptr = (txbuf.get_ptr + dma_length) & txbuf.mask;
+   //txbuf.get_ptr = (DMA1_Stream3->M0AR - (uint32_t) txbuf.data + 1) & txbuf.mask;
    if (((txbuf.put_ptr - txbuf.get_ptr) & txbuf.mask ) > 0 ) {
      /* set the start address of your data */      
      DMA1_Stream3->M0AR = (uint32_t) txbuf.data + txbuf.get_ptr;
@@ -231,9 +234,11 @@ void USART3_IRQHandler(void)
        DMA1_Stream3->NDTR = txbuf.mask + 1 - txbuf.get_ptr;
      }
 
+     dma_length = DMA1_Stream3->NDTR;
      /* Enable transfer by setting EN bit */
      DMA1_Stream3->CR |= DMA_SxCR_EN;
    }
+   DMA_irq_count++;
 
  }
 #endif /* USART3_TX_USE_DMA1_CH4 */

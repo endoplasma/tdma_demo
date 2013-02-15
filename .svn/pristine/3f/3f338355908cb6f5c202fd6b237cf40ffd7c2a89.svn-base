@@ -1769,8 +1769,8 @@ void rf231_start_sneeze(void)
 #endif
 
   hal_register_write(0x36, 0x0F);
-  hal_register_write(0x0C, 0x03);
-  hal_register_write(0x0A, 0xA7);
+//  hal_register_write(0x0C, 0x03);
+//  hal_register_write(0x0A, 0xA7);
 
   for (i=0;i<RF230_MAX_TX_FRAME_LENGTH;i++)
     buffer[i] = (uint8_t)random_rand();
@@ -1800,6 +1800,7 @@ void rf231_start_sneeze(void)
 
   while ((GPIOB->IDR & GPIO_IDR_IDR_0) == 0) {;}
 
+  hal_register_write(0x1C, 0x00);
   HAL_ENABLE_RADIO_INTERRUPT( );	
   rf230_warm_reset();
   

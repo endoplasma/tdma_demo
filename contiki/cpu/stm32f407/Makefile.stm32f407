@@ -64,10 +64,10 @@ CONTIKI_SOURCEFILES        += $(CONTIKI_TARGET_SOURCEFILES)
 
 ### Compiler definitions
 # GCC
-GCC_NAME = /home/psp/sat/bin/arm-none-eabi-
+#GCC_NAME = /home/psp/sat/bin/arm-none-eabi-
 #GCC_NAME = /home/psp/Downloads/gcc-arm-none-eabi-4_7-2012q4/bin/arm-none-eabi-
 #GCC_NAME = /home/spliphi/sat2/bin/arm-none-eabi-
-#GCC_NAME = arm-none-eabi-
+GCC_NAME = ~/sat/bin/arm-none-eabi-
 CC	 = $(GCC_NAME)gcc
 LD       = $(GCC_NAME)gcc
 AS	 = $(GCC_NAME)gcc
@@ -86,6 +86,8 @@ endif #DEBUG
 
 CFLAGSNO = -mthumb \
 	   -mcpu=cortex-m4 \
+	   -mfloat-abi=hard \
+	   -mfpu=fpv4-sp-d16 \
 	   -g \
 	   -D __MICROLIB \
 
@@ -93,6 +95,8 @@ CFLAGS  += $(CFLAGSNO) $(OPTI) $(addprefix -D, $(MY_DEFINES))
 
 ASFLAGS = -mthumb \
 	  -mcpu=cortex-m4 \
+	   -mfloat-abi=hard \
+	   -mfpu=fpv4-sp-d16 \
 	  -c \
 	  -g \
 	  -Wall \
@@ -105,6 +109,8 @@ ASFLAGS = -mthumb \
 
 LDFLAGS += -mcpu=cortex-m4 \
 	   -mthumb  \
+	   -mfloat-abi=hard \
+	   -mfpu=fpv4-sp-d16 \
 	   -Wl,-T$(CONTIKI_CPU)/stm32_flash.ld \
 	   -u Default_Handler \
 	   -nostartfiles \

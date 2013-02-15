@@ -49,4 +49,6 @@ void usart3_writeb(unsigned char c);
 void usart3_init(unsigned long ubr);
 //uint8_t usart3_active(void);
 
+extern uint32_t DMA_irq_count;
+
 #endif /* __USART3_H__ */
