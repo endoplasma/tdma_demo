@@ -256,16 +256,13 @@ int _write(int file, char *ptr, int len) {
   case STDOUT_FILENO:
 
 #if STDOUT_LINE == 3 /* USART3 */
-//    for (i = 0; i < len; i++) {
-//      usart3_writeb((unsigned char)ptr[i]);
     	usart3_writebuff(ptr,len);
-//    }
-#warning TODO implement usart3-send-buffer Function
 
 #elif STDOUT_LINE == 4 /* UART4 */
     for (i = 0; i < len; i++) {
       uart4_writeb((unsigned char)ptr[i]);
     }
+#warning UART4 write not tested!
 #warning TODO implement uart4 send buffer function
 
 
@@ -281,21 +278,19 @@ int _write(int file, char *ptr, int len) {
   case STDERR_FILENO: /* stderr */
 
 #if STDERR_LINE == 3 /* USART3 */
-    for (i = 0; i < len; i++) {
-      usart3_writeb((unsigned char)ptr[i]);
-    }
-#warning TODO implement usart3-send-buffer Function
+	  usart3_writebuff(ptr,len);
 
 #elif STDERR_LINE == 4 /* UART4 */
     for (i = 0; i < len; i++) {
       uart4_writeb((unsigned char)ptr[i]);
     }
+#warning UART4 write not tested!
 #warning TODO implement uart4 send buffer function
 
 
 #elif STDERR_LINE == 99 /* USB */
     APP_FOPS.pIf_DataTx(u8ptr, len);
-#warning USB wirte not implemente
+#warning USB wirte not implemented
 #endif
 
 

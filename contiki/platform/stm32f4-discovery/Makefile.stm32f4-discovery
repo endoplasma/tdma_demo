@@ -8,6 +8,9 @@ ifndef CONTIKI_TARGET_MAIN
 CONTIKI_TARGET_MAIN = contiki-main.c 
 endif
 
+# rf chip
+include $(CONTIKI)/cpu/avr/radio/rf230bb/Makefile.rf231
+
 CONTIKI_TARGET_SOURCEFILES += $(ARCH) $(CONTIKI_TARGET_MAIN)
 
 PLATFORM_DEFINES = \
@@ -21,10 +24,6 @@ PLATFORM_DEFINES = \
 	USART3_TX_USE_DMA1_CH4 \
 #	USE_USB \
 
-
-
-# rf chip
-include $(CONTIKI)/cpu/avr/radio/rf230bb/Makefile.rf231
 
 MCU=STM32F407
 include $(CONTIKI)/cpu/stm32f407/Makefile.stm32f407

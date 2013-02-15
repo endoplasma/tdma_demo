@@ -64,7 +64,6 @@ static struct ringbuf txbuf;
 static uint8_t txbuf_data[USART3_TX_BUFSIZE];
 
 volatile uint16_t dma_length;
-uint32_t DMA_irq_count = 0;
 
 void usart3_set_input(int (*input)(unsigned char c)) {
   usart3_input_handler = input;
@@ -238,7 +237,6 @@ void USART3_IRQHandler(void)
      /* Enable transfer by setting EN bit */
      DMA1_Stream3->CR |= DMA_SxCR_EN;
    }
-   DMA_irq_count++;
 
  }
 #endif /* USART3_TX_USE_DMA1_CH4 */

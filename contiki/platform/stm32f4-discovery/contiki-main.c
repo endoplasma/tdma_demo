@@ -46,7 +46,6 @@
 
 #ifdef USE_USART3
 #include "usart3.h"
-#warning usart3 in use
 #endif /* USE_USART3 */
 
 #ifdef USE_UART4
@@ -142,23 +141,6 @@ int main (void) {                       /* Main Program                       */
   
   // Led initialization
   leds_init();
-
-#define delay_us( us )   ( clock_delay_usec( us ) )
-  PRINTF("0123456789abcdef0123456789ab\r\n");
-  delay_us(20000);
-  PRINTF("0123456789abcdef0123456789abc\r\n");
-  delay_us(20000);
-  PRINTF("0123456789abcdef0123456789abcd\r\n");
-  delay_us(20000);
-  PRINTF("0123456789abcdef0123456789abcde\r\n");
-  delay_us(20000);
-  PRINTF("0123456789abcdef0123456789abcdef\r\n");
-  delay_us(20000);
-  PRINTF("0123456789abcdef0123456789\r\n");
-  PRINTF("abcdef0123456789abcdef\r\n");
-
-  PRINTF("Number of DMA IRQ: %u\r\n", DMA_irq_count);
-
 
   PRINTF("\r\nStarting ");
   PRINTF(CONTIKI_VERSION_STRING);

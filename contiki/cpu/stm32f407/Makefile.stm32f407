@@ -15,7 +15,7 @@ CONTIKI_CPU_DIRS += . \
 		 STM32_USB_Device_Library/Core/inc \
 		 STM32_USB_Device_Library/Core/src \
 		 STM32_USB_OTG_Driver/inc \
-		 STM32_USB_OTG_Driver/src 
+		 STM32_USB_OTG_Driver/src \
 
 ### put CPU specific defines that shall be used as compilerflags here
 CPU_DEFINES= \
@@ -166,9 +166,11 @@ contiki-$(TARGET).a: $(CONTIKI_OBJECTFILES)
 CUSTOM_RULE_C_TO_CO=1
 %.co: %.c
 	@echo Compiling $@ ...
-	$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 defines:
 	@echo Compiler Defines are:
 	@echo $(DEFINES)
+	@echo $(CONTIKI_SOURCEFILES)
+	@echo $(CONTIKI_CPU_DIRS)
 #	@echo $(CFLAGS)
