@@ -72,28 +72,29 @@
 #elif PLATFORM_TYPE == STM32F4_Discovery
 /* KUSZ development platform */
 /* using SPI1 on PA4-7 */
-#define IRQPORT               GPIOA
-#define IRQPIN                0 /* PA0/TIM5_CH1 -> "TRIG"  - required for input capture!!! */
+#define IRQ0PORT              GPIOA
+#define IRQ0PIN               0 /* PA0/TIM5_CH1 */
+#define IRQ1PORT              GPIOA
+#define IRQ1PIN               1 /* PA1/TIM5_CH2 */
 #define RSTPORT               GPIOA
-#define RSTPIN                1 /* PA1 -> "RST" */
-#define SLPTRPORT             GPIOA
-#define SLPTRPIN              3 /* PA3 -> "RT" */
+#define RSTPIN                3 /* PA3 */
 
 #define SPIPORT               GPIOA
-#define SSPIN                 4 /* PA4/SPI1_NSS -> "PROG" */
-#define SCKPIN                5 /* PA5/SPI1_SCK -> "CCLK" */
-#define MISOPIN               6 /* PA6/SPI1_MISO -> "DIN" */
-#define MOSIPIN               7 /* PA7/SPI1_MOSI -> "B/P" */
+#define SSPIN                 4 /* PA4/SPI1_NSS */
+#define SCKPIN                5 /* PA5/SPI1_SCK */
+#define MISOPIN               6 /* PA6/SPI1_MISO */
+#define MOSIPIN               7 /* PA7/SPI1_MOSI */
 
 #define RCC_AHB1ENR_GPIOxEN   RCC_AHB1ENR_GPIOAEN
 
-#if RF231_HAS_PA
+#if 0
+/* can be usyed for debug or later for channel filter */
 #define PAENPORT              GPIOC
 #define PAENPIN               4
 #define HGMPORT               GPIOC
 #define HGMPIN                5
 #define RCC_AHB1ENR_PAGPIOxEN RCC_AHB1ENR_GPIOCEN
-#endif /* RF231_HAS_PA */
+#endif
 
 #define SPIx                  SPI1
 #define SPI_APBxENR           APB2ENR
@@ -107,8 +108,10 @@
 #define RCC_AHB1_SPI_DMAx               RCC_AHB1ENR_DMA2EN
 #define SPI_DMAx_STREAM_RX              DMA2_Stream0
 #define SPI_DMAx_STREAM_TX              DMA2_Stream3
-#define SPI_DMA_LIFCR_CTCIF_RX          DMA_LIFCR_CTCIF0
-#define SPI_DMA_LIFCR_CTCIF_TX          DMA_LIFCR_CTCIF3
+#define SPI_DMA_IFCR_RX                 SPI_DMAx->LIFCR
+#define SPI_DMA_IFCR_TX                 SPI_DMAx->LIFCR
+#define SPI_DMA_IFCR_CTCIF_RX           DMA_LIFCR_CTCIF0
+#define SPI_DMA_IFCR_CTCIF_TX           DMA_LIFCR_CTCIF3
 #define SPI_DMAx_CHANNEL                (DMA_SxCR_CHSEL_1 | DMA_SxCR_CHSEL_0)
 #define SPI_DMAx_STREAM_RX_IRQn         DMA2_Stream0_IRQn
 #define SPI_DMAx_STREAM_RX_IRQHandler   DMA2_Stream0_IRQHandler
@@ -117,15 +120,23 @@
 #define RCC_APB1ENR_TIMxEN    RCC_APB1ENR_TIM5EN
 #define TIMx_IRQn             TIM5_IRQn
 #define TIMx_IRQHandler       TIM5_IRQHandler
-#define CCRx                  CCR1
-#define CCMRx                 CCMR1
-#define CCMRx_CCx_MASK        ((uint16_t)0x00FF)
-#define TIM_CCMRx_IC_TI_MAP   TIM_CCMR1_CC1S_0
-#define CCER_CCx_MASK         ((uint16_t)0x000F)
-#define TIM_CCER_CCxE         TIM_CCER_CC1E
-#define TIM_SR_CCxIF          TIM_SR_CC1IF
-#define TIM_DIER_CCxIE        TIM_DIER_CC1IE
 #define TIMx_AF               2
+#define CCRx_IRQ0                  CCR1
+#define CCMRx_IRQ0                 CCMR1
+#define CCMRx_CCx_MASK_IRQ0        ((uint16_t)0x00FF)
+#define TIM_CCMRx_IC_TI_MAP_IRQ0   TIM_CCMR1_CC1S_0
+#define CCER_CCx_MASK_IRQ0         ((uint16_t)0x000F)
+#define TIM_CCER_CCxE_IRQ0         TIM_CCER_CC1E
+#define TIM_SR_CCxIF_IRQ0          TIM_SR_CC1IF
+#define TIM_DIER_CCxIE_IRQ0        TIM_DIER_CC1IE
+#define CCRx_IRQ1                  CCR2
+#define CCMRx_IRQ1                 CCMR1
+#define CCMRx_CCx_MASK_IRQ1        ((uint16_t)0xFF00)
+#define TIM_CCMRx_IC_TI_MAP_IRQ1   TIM_CCMR1_CC2S_0
+#define CCER_CCx_MASK_IRQ1         ((uint16_t)0x00F0)
+#define TIM_CCER_CCxE_IRQ1         TIM_CCER_CC2E
+#define TIM_SR_CCxIF_IRQ1          TIM_SR_CC2IF
+#define TIM_DIER_CCxIE_IRQ1        TIM_DIER_CC2IE
 
 #else
 
