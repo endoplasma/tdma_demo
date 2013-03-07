@@ -23,10 +23,18 @@ CPU_DEFINES= \
 
 #	USART3_TX_USE_DMA1_CH4 \
 
+
+
 MY_DEFINES = $(CPU_DEFINES) $(PLATFORM_DEFINES) $(PROJECT_DEFINES)
 
 ### Direcotry of the used radio chip
+
+ifdef TDMA_TEST
+RADIO_CHIP_DIR = $(CONTIKI)/radios/rf231_slotted
+else
 RADIO_CHIP_DIR = $(CONTIKI)/cpu/avr/radio/rf230bb
+endif
+
 CONTIKI_CPU_DIRS += $(RADIO_CHIP_DIR)
 
 ## C Code Files

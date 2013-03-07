@@ -191,11 +191,12 @@ int main (void) {                       /* Main Program                       */
   memcpy(&uip_lladdr.addr, &addr.u8, sizeof(rimeaddr_t));
   rimeaddr_set_node_addr(&addr); 
 
+#ifndef TDMA_TEST
   rf230_set_pan_addr(0xabcd,0xbabe,(uint8_t *)&addr.u8);
   rf230_set_channel(CHANNEL_802_15_4);
   rf230_set_txpower(0); /* max */
   PRINTF("EUI-64 MAC: %x-%x-%x-%x-%x-%x-%x-%x\n",addr.u8[0],addr.u8[1],addr.u8[2],addr.u8[3],addr.u8[4],addr.u8[5],addr.u8[6],addr.u8[7]);
-
+#endif /* TDMA_TEST */
   /* Initialize stack protocols */
   queuebuf_init();
 
@@ -205,9 +206,11 @@ int main (void) {                       /* Main Program                       */
 
 #define ANNOUNCE_BOOT 1
 #if ANNOUNCE_BOOT
+#ifndef TDMA_TEST
   PRINTF("%s %s, channel %u , check rate %u Hz tx power %u\n",NETSTACK_MAC.name, NETSTACK_RDC.name, rf230_get_channel(),
     CLOCK_SECOND / (NETSTACK_RDC.channel_check_interval() == 0 ? 1:NETSTACK_RDC.channel_check_interval()),
     rf230_get_txpower());	  
+#endif /* TDMA_TEST */
 #if UIP_CONF_IPV6_RPL
   PRINTF("RPL Enabled\n");
 #endif

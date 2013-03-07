@@ -9,7 +9,8 @@ CONTIKI_TARGET_MAIN = contiki-main.c
 endif
 
 # rf chip
-include $(CONTIKI)/cpu/avr/radio/rf230bb/Makefile.rf231
+#include $(CONTIKI)/cpu/avr/radio/rf230bb/Makefile.rf231
+include $(CONTIKI)/radios/rf231_slotted/Makefile.rf231_slotted
 
 CONTIKI_TARGET_SOURCEFILES += $(ARCH) $(CONTIKI_TARGET_MAIN)
 

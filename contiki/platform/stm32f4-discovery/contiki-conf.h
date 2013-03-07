@@ -85,7 +85,12 @@
 #define NETSTACK_CONF_MAC         nullmac_driver
 #define NETSTACK_CONF_RDC         nullrdc_driver
 #define NETSTACK_CONF_FRAMER      framer_802154
+
+#if (TDMA_TEST == 1)
+#define NETSTACK_CONF_RADIO       rf231_slotted_driver
+#else
 #define NETSTACK_CONF_RADIO       rf230_driver
+#endif
 
 #define NULLRDC_CONF_802154_AUTOACK_HW 1
 #define SICSLOWPAN_CONF_MAX_MAC_TRANSMISSIONS 4
