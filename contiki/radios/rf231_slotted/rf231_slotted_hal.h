@@ -1,9 +1,19 @@
-#define IRQPORT               GPIOA
-#define IRQPIN                0 /* PA0/TIM5_CH1 -> "TRIG"  - required for input capture!!! */
+#ifndef RF231_SLOTTED_HAL_H
+#define RF231_SLOTTED_HAL_H
+
+
+/*============================ INCLUDE =======================================*/
+#include <stdint.h>
+#include <stdbool.h>
+#include "contiki-conf.h"
+#include <stm32f4xx.h>                  /* STM32F4xx Definitions              */
+
+#define IRQ0PORT              GPIOA
+#define IRQ0PIN               0 /* PA0/TIM5_CH1 -> "TRIG"  - required for input capture!!! */
 #define RSTPORT               GPIOA
 #define RSTPIN                1 /* PA1 -> "RST" */
-#define SLPTRPORT             GPIOA
-#define SLPTRPIN              3 /* PA3 -> "RT" */
+#define IRQ1PORT              GPIOA
+#define IRQ1PIN               3 /* PA3 -> "RT" */
 
 #define SPIPORT               GPIOA
 #define SSPIN                 4 /* PA4/SPI1_NSS -> "PROG" */
@@ -46,17 +56,60 @@
 /*
  *
  */
-#define TIMx                  TIM2                /** The timer */
-#define RCC_APB1ENR_TIMxEN    RCC_APB1ENR_TIM2EN  /** Enable Timer 2 */
-#define TIMx_IRQn             TIM2_IRQn           /** The timer */
-#define TIMx_IRQHandler       TIM2_IRQHandler     /** Interrupt Handler */
+#define TIMx                  TIM2                          /** The timer */
+#define TIMx_AF               1                             /** Alternate Function */
+#define RCC_APB1ENR_TIMxEN    RCC_APB1ENR_TIM2EN            /** Enable Timer 2 */
+#define TIMx_IRQn             TIM2_IRQn                     /** The timer */
+#define TIMx_IRQHandler       TIM2_IRQHandler               /** Interrupt Handler */
+#define TIM_GPIO_MASk         0xFFFFFFCC                    /** PORT 0 and 3 */
+#define TIM_GPIO_MODE         0x00000022                    /** AF Mode for PORT 0 and 3 */
+#define TIM_GPIO_AF           0x00001001
+/**
+ * Input Capture Definitions
+ */
+#define CCR_IC                CCR1                          /** Input Register */
+#define CCMR_IC               CCMR1                         /** Register with IC Channel */
+#define CCMR_IC_MASK          (TIM_CCMR1_CC1S | \
+                               TIM_CCMR1_IC1F | \
+                               TIM_CCMR1_IC1PSC)            /** Mask for Input Capture */
+#define CCMR_IC_CHAN          TIM_CCMR1_CC1S_0              /** IC1 Mapped on TI1 */
+#define CCMR_IC_FILTER        0                             /** No Filtering */
+#define CCMR_IC_PRESCALER     0                             /** No Prescaler */
+#define CCER_IC_MASK          (TIM_CCER_CC1E | \
+                               TIM_CCER_CC1P | \
+                               TIM_CCER_CC1NP )             /** Input Capture Enable Mask */
+#define CCER_IC_CCE           TIM_CCER_CC1E                 /** Capture Enabled */
+#define CCER_IC_CCP           0                             /** Rising Edge */
+#define TIM_IC_IRQ_FLAG       TIM_SR_CC1IF                   /** Input Capture Interupt */
+#define TIM_IC_OC_FLAG        TIM_SR_CC1OF                  /** Output Compare Overcapture */
 
-#define CCMR_IC               CCMR1               /** Register with IC Channel */
-#define CCMR_IC_CHAN         
+/**
+ * Output Compare Definitions
+ */
+#define CCR_OC                CCR4                          /** Capture Register */
+#define CCMR_OC               CCMR2                         /** Register with OC Channel */
+#define CCMR_OC_MASK          (TIM_CCMR2_CC4S | \
+                               TIM_CCMR2_OC4FE | \
+                               TIM_CCMR2_OC4PE | \
+                               TIM_CCMR2_OC4M | \
+                               TIM_CCMR2_OC4CE )            /** Mask for Output Compare */
+#define CCMR_OC_CHAN          0                             /** OC4 as Output */
+#define CCMR_OC_FE            0                             /** fast mode disabled */
+#define CCMR_OC_PE            0                             /** no preload register */
+#define CCMR_OC_M             TIM_CCMR2_OC4M_0              /** active level on match */
+#define CCMR_OC_CE            0                             /** clear disabled */
+#define CCER_OC_MASK          (TIM_CCER_CC4E | \
+                               TIM_CCER_CC4P | \
+                               TIM_CCER_CC4NP )             /** Output Compare Enable Mask */
+#define CCER_OC_CCE           TIM_CCER_CC4E                 /** Output Enabled */
+#define CCER_OC_CCP           0                             /** Output High */
+#define TIM_OC_IRQ_FLAG       TIM_SR_CC4IF                  /** Output Compare Interupt */
+#define TIM_OC_OC_FLAG        TIM_SR_CC4OF                  /** Output Compare Overcapture */
+#define TIM_OC_IE             TIM_DIER_CC4IE                /** Output Compare Overcapture */
 
 
-
-#define CCMR_OC               CCMR2               /** Register with OC Channel */
-
+#define PERIOD                1000
 
 int hal_init(void);
+
+#endif

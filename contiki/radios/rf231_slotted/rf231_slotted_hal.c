@@ -6,22 +6,36 @@
 void TIMx_IRQHandler(void)
 {
   volatile uint32_t capture;
-  if (TIMx->SR & TIM_SR_CCxIF_IRQ0)	/* IRQ0 */
+  if (TIMx->SR & TIM_IC_IRQ_FLAG)	/* Input Capture Interrupt detected */
   {
-    capture = TIMx->CCRx_IRQ0;
+    capture = TIMx->CCR_IC;
+    TIMx->SR &= ~TIM_IC_IRQ_FLAG;
 
   }
-  if (TIMx->SR & TIM_SR_CCxIF_IRQ1)	/* IRQ1 */
+  if (TIMx->SR & TIM_OC_IRQ_FLAG)	/* Output Capture Interrupt detected */
   {
-    capture = TIMx->CCRx_IRQ1;
-    // capture compare 4 verarbeiten
-    TIM2->CCR4=TIM2->CCR4+PERIOD;
-    // OC4 zurücksetzen
+
+    TIMx->CCR_OC=TIMx->CCR_OC + PERIOD;
+    TIMx->SR &= ~TIM_OC_IRQ_FLAG;
+
+    TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+    TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_2);
+
+    TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+    TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_0);
+    
+    /* Polarity to faling */
+    /* OC flag löschen
+       Flanke umdrehen
+       etrf manuell auslösen
+       Flanke drehen
+       OC löschen */
+
   }
   else if (TIMx->SR & TIM_SR_UIF)
   {
     TIMx->SR &= ~TIM_SR_UIF;
-    hal_time_isr_func();
+    // hal_time_isr_func();
   }
 }
 
@@ -34,43 +48,106 @@ int
 hal_init(void) 
 {
   uint16_t tmpccmrx = 0;        /** Capture/Compare Mode Register Value */
-  unit16_t tmpccer = 0;         /** Capture/Compare Enabled Register Value */
+  uint16_t tmpccer = 0;         /** Capture/Compare Enabled Register Value */
 
   /****** Conifgure the Timer *************************************************/
   /* Enable the clocksource */
   RCC->APB1ENR |= RCC_APB1ENR_TIMxEN;
   /* Set Timer to disabled,upcounting,Edge-aligned,no prescaler */
   TIMx->CR1 = 0;
+  TIMx->ARR = 0xFFFFFFFF;
+  TIMx->PSC = 84-1;
+  TIMx->EGR = TIM_EGR_UG;
+
   /* Reset/Disable All Capture and Compare Units */
   TIMx->CCER = 0;
 
-  /* Select Channel and set filter  */
+  /* Setup Input Capture - load register, clear all bits regarding out
+   * IC channel, set predefined values and write back
+   */
   tmpccmrx = TIMx->CCMR_IC;
-  tmpccmrx &= ((uint16_t)~TIM_CCMR1_CC1S) & ((uint16_t)~TIM_CCMR1_IC1F);
-  tmpccmrx |= (uint16_t)(TIM_ICSEL | (uint16_t)(TIM_ICFilter << (uint16_t)4));
+  tmpccmrx &= ~CCMR_IC_MASK;
+  tmpccmrx |= (CCMR_IC_CHAN | CCMR_IC_FILTER | CCMR_IC_PRESCALER);
+  TIMx->CCMR_IC = tmpccmrx;
 
+  tmpccer = TIMx->CCER;
+  tmpccer &= ~CCER_IC_MASK;
+  tmpccer |=  (CCER_IC_CCE | CCER_IC_CCP);
+  TIMx->CCER = tmpccer;
+  
+  /* Setup Output Compare -  load register, clear all bits regarding our
+   * OC channel, set predefined values and write back
+   */
+  tmpccmrx = TIMx->CCMR_OC;
+  tmpccmrx &= ~CCMR_OC_MASK;
+  tmpccmrx |= (CCMR_OC_CHAN | CCMR_OC_FE | CCMR_OC_PE |  CCMR_OC_M | CCMR_OC_CE);
+  TIMx->CCMR_OC = tmpccmrx;
+
+  tmpccer = TIMx->CCER;
+  tmpccer &= ~CCER_OC_MASK;
+  tmpccer |=  (CCER_OC_CCE | CCER_OC_CCP);
+  TIMx->CCER = tmpccer;
+
+  TIMx->CCR_OC = PERIOD;
 
   /**
-   * 1. set Input channel IC1
+   * Set special function for Input and Output
+   * 
    */
+  //RCC->AHB1ENR  |= RCC_AHB1ENR_GPIOAEN;         /* Enable GPIOC clock                 */
+//  GPIOA->MODER  &= ~TIM_GPIO_MASk;
+//  GPIOA->MODER  |= TIM_GPIO_MODE;
+//  GPIOA->AFR[1] |= TIM_GPIO_AF;          /* PD8 USART3_Tx, PD9 USART3_Rx (AF7) */
 
-  /* Write to TIMx CCMRx and CCER registers */
-  TIMx->CCMRx_IRQ0 &= ~CCMRx_CCx_MASK_IRQ0; /* reset all bits regarding CCx */
-  TIMx->CCMRx_IRQ0 |= TIM_CCMRx_IC_TI_MAP_IRQ0; /* map ICx to TIx, no filter, no prescaler */
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
 
-  TIMx->CCER &= ~CCER_CCx_MASK_IRQ0; /* reset all bits regarding CCx */
-  TIMx->CCER |= TIM_CCER_CCxE_IRQ0; /* rising & enable CCx */
+  /*!< Control pins configuration *************************************************/
 
-  TIMx->CCER &= ~
-capture compare 4 aktivieren
+  /*!< RST pin configuration */
+  RSTPORT->MODER &= ~((uint32_t)0x3 << ((uint32_t)RSTPIN * 2));	/* unselect mode */
+  RSTPORT->MODER |= ((uint32_t)0x1 << ((uint32_t)RSTPIN * 2));	/* select output mode */
+  RSTPORT->OSPEEDR &= ~((uint32_t)0x3 << ((uint32_t)RSTPIN * 2)); /* reset speed */
+  RSTPORT->OSPEEDR |= ((uint32_t)0x2 << ((uint32_t)RSTPIN * 2)); /* set speed to 50 MHz */
+  RSTPORT->OTYPER &= ~((uint32_t)0x1 << (uint32_t)RSTPIN);	/* select push-pull */
+  RSTPORT->PUPDR &= ~((uint32_t)0x3 << ((uint32_t)RSTPIN * 2)); /* no pull-up/-down */
+  RSTPORT->ODR &= ~((uint32_t)0x1 << (uint32_t)RSTPIN);	/* set output low */
 
+  /*!< IRQ0 pin configuration */
+  IRQ0PORT->MODER &= ~((uint32_t)0x3 << ((uint32_t)IRQ0PIN * 2));	/* unselect mode */
+  IRQ0PORT->MODER |= ((uint32_t)0x2 << ((uint32_t)IRQ0PIN * 2));	/* select AF mode */
+  IRQ0PORT->OSPEEDR &= ~((uint32_t)0x3 << ((uint32_t)IRQ0PIN * 2)); /* reset speed */
+  IRQ0PORT->OSPEEDR |= ((uint32_t)0x3 << ((uint32_t)IRQ0PIN * 2)); /* set speed to 100 MHz */
+  IRQ0PORT->OTYPER &= ~((uint32_t)0x1 << (uint32_t)IRQ0PIN);	/* select push-pull */
+  IRQ0PORT->PUPDR &= ~((uint32_t)0x3 << ((uint32_t)IRQ0PIN * 2)); /* no pull-up/-down */
+
+  /*!< Connect IRQ0 pin to AF1 (TIM1/TIM2) or AF2 (TIM3-5) */
+  /* blank out function selections on IRQ pin and then rewrite with TIMx_AF */
+  IRQ0PORT->AFR[IRQ0PIN >> 0x03] &= ~((uint32_t)0xF << ((uint32_t)((uint32_t)IRQ0PIN & (uint32_t)0x07) * 4)) ;
+  IRQ0PORT->AFR[IRQ0PIN >> 0x03] |= ((uint32_t)TIMx_AF << ((uint32_t)((uint32_t)IRQ0PIN & (uint32_t)0x07) * 4)) ;
+
+  /*!< IRQ1 pin configuration */
+  IRQ1PORT->MODER &= ~((uint32_t)0x3 << ((uint32_t)IRQ1PIN * 2));	/* unselect mode */
+  IRQ1PORT->MODER |= ((uint32_t)0x2 << ((uint32_t)IRQ1PIN * 2));	/* select AF mode */
+  IRQ1PORT->OSPEEDR &= ~((uint32_t)0x3 << ((uint32_t)IRQ1PIN * 2)); /* reset speed */
+  IRQ1PORT->OSPEEDR |= ((uint32_t)0x3 << ((uint32_t)IRQ1PIN * 2)); /* set speed to 100 MHz */
+  IRQ1PORT->OTYPER &= ~((uint32_t)0x1 << (uint32_t)IRQ1PIN);	/* select push-pull */
+  IRQ1PORT->PUPDR &= ~((uint32_t)0x3 << ((uint32_t)IRQ1PIN * 2)); /* no pull-up/-down */
+
+  /*!< Connect IRQ1 pin to AF1 (TIM1/TIM2) or AF2 (TIM3-5) */
+  /* blank out function selections on IRQ pin and then rewrite with TIMx_AF */
+  IRQ1PORT->AFR[IRQ1PIN >> 0x03] &= ~((uint32_t)0xF << ((uint32_t)((uint32_t)IRQ1PIN & (uint32_t)0x07) * 4)) ;
+  IRQ1PORT->AFR[IRQ1PIN >> 0x03] |= ((uint32_t)TIMx_AF << ((uint32_t)((uint32_t)IRQ1PIN & (uint32_t)0x07) * 4)) ;
+
+  /* Enable OC Interrupt */
+  TIMx->DIER |= TIM_OC_IE;
 
   IRQ_init_enable(TIMx_IRQn,1,0);
 
   /* TIM enable counter */
   TIMx->CR1 |= TIM_CR1_CEN;
 
-  HAL_ENABLE_OVERFLOW_INTERRUPT();
+
+  //  HAL_ENABLE_OVERFLOW_INTERRUPT();
 
   return 1;
 }

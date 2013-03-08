@@ -84,6 +84,7 @@ const struct radio_driver rf231_slotted_driver =
 int
 rf231_init(void)
 {
+  hal_init();
   return 1;
 }
 
