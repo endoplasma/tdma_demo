@@ -1,5 +1,8 @@
 #include "rf231_slotted_hal.h"
 
+extern void rf231_slotted_IC_irqh(uint32_t capture);
+//extern void rf231_slotted_OC_irqh(void);
+
 /**
  * Interupthandler Routine for TIMx
  */
@@ -10,33 +13,45 @@ void TIMx_IRQHandler(void)
   {
     capture = TIMx->CCR_IC;
     TIMx->SR &= ~TIM_IC_IRQ_FLAG;
-
+    rf231_slotted_IC_irqh(capture);
   }
   if (TIMx->SR & TIM_OC_IRQ_FLAG)	/* Output Capture Interrupt detected */
   {
-
-    TIMx->CCR_OC=TIMx->CCR_OC + PERIOD;
-    TIMx->SR &= ~TIM_OC_IRQ_FLAG;
-
-    TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
-    TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_2);
-
-    TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
-    TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_0);
-    
-    /* Polarity to faling */
-    /* OC flag löschen
-       Flanke umdrehen
-       etrf manuell auslösen
-       Flanke drehen
-       OC löschen */
-
+	  /* Clear IRQ Flag*/
+	  TIMx->SR &= ~TIM_OC_IRQ_FLAG;
+#ifdef SLOTTED_KOORDINATOR
+	  /* Set Compare Value for next send and clear IRQ Flag	*/
+	  TIMx->CCR_OC=TIMx->CCR_OC + PERIOD;
+#endif /* SLOTTED_KOORDINATOR */
+	  /* Generate Output Pulse by toggeling the output signal polarity
+	   * change compare mode output signal from High level to low to end the pulse */
+	  TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+	  TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_2);
+	  /* set compare mode output signal back to high for the next period */
+	  TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+	  TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_0);
   }
   else if (TIMx->SR & TIM_SR_UIF)
   {
     TIMx->SR &= ~TIM_SR_UIF;
     // hal_time_isr_func();
   }
+}
+
+/**
+ * set a new Output compare Value
+ */
+void hal_update_oc(uint32_t oc_value)
+{
+	TIMx->CCR_OC=oc_value;
+}
+
+/**
+ * add a value to the current OC value
+ */
+void hal_update_oc_incr(uint32_t oc_value)
+{
+	TIMx->CCR_OC=TIMx->CCR_OC + oc_value;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -138,8 +153,9 @@ hal_init(void)
   IRQ1PORT->AFR[IRQ1PIN >> 0x03] &= ~((uint32_t)0xF << ((uint32_t)((uint32_t)IRQ1PIN & (uint32_t)0x07) * 4)) ;
   IRQ1PORT->AFR[IRQ1PIN >> 0x03] |= ((uint32_t)TIMx_AF << ((uint32_t)((uint32_t)IRQ1PIN & (uint32_t)0x07) * 4)) ;
 
-  /* Enable OC Interrupt */
+  /* Enable OC and IC Interrupt */
   TIMx->DIER |= TIM_OC_IE;
+  TIMx->DIER |= TIM_IC_IE;
 
   IRQ_init_enable(TIMx_IRQn,1,0);
 

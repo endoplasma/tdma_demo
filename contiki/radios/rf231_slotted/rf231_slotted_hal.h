@@ -81,7 +81,8 @@
 #define CCER_IC_CCE           TIM_CCER_CC1E                 /** Capture Enabled */
 #define CCER_IC_CCP           0                             /** Rising Edge */
 #define TIM_IC_IRQ_FLAG       TIM_SR_CC1IF                   /** Input Capture Interupt */
-#define TIM_IC_OC_FLAG        TIM_SR_CC1OF                  /** Output Compare Overcapture */
+#define TIM_IC_OC_FLAG        TIM_SR_CC1OF                  /** Input Capture Overcapture */
+#define TIM_IC_IE             TIM_DIER_CC1IE                /** INput Capture Overcapture */
 
 /**
  * Output Compare Definitions
@@ -109,6 +110,9 @@
 
 
 #define PERIOD                1000
+#define SLOT				  800
+
+#define FILTER_FACTOR         (1/2)                         /** alpha value for median calculation via IIF */
 
 int hal_init(void);
 

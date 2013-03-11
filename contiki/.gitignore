@@ -11,3 +11,14 @@ Makefile.target
 doc/html
 patches-*
 tools/tunslip6
+*.svn*
+contiki/.cproject*
+contiki/.project*
+contiki/.settings*
+*#
+*~
+*.bak
+*.ini
+makelog
+
+

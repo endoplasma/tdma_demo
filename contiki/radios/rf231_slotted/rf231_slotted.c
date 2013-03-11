@@ -13,26 +13,20 @@
 #include "sys/timetable.h"
 #include "lib/random.h"
 
-/* RS232 delays will cause 6lowpan fragment overruns! Use DEBUGFLOW instead. */
-#define DEBUG 1
-#if DEBUG
-#define PRINTF(...) printf(__VA_ARGS__)
-//#define PRINTF(FORMAT,args...) printf_P(PSTR(FORMAT),##args)
-#define PRINTSHORT(FORMAT,args...) printf_P(PSTR(FORMAT),##args)
-#else
-#define PRINTF(...)
-#define PRINTSHORT(...)
-#endif
-#if DEBUG>1
-/* Output format is suitable for text2pcap to convert to wireshark pcap file.
- * Use $text2pcap -e 0x809a (these_outputs) capture.pcap
- * Since the hardware calculates and appends the two byte checksum to Tx packets,
- * we just add two zero bytes to the packet dump. Don't forget to enable wireshark
- * 802.15.4 dissection even when the checksum is wrong!
- */
-#endif
+/*---------------------------------------------------------------------------*/
+PROCESS(rf231_slotted_process, "Slotted TDMA Driver");
 
 uint8_t volatile rf231_pending;
+
+/**
+ * A struct to store information about the state and defines some basic global variables
+ */
+
+static uint32_t PeriodBuffer[NUM_PERIODS];      	/** Array to store the last measured Periods */
+static uint8_t PeriodPos;					  		/** Position to store the next measurement */
+static uint8_t PeriodCount;                         /** The number of stored Periods */
+static uint32_t Period;                             /** The length of our send Period */
+
 
 /* RF231 hardware delay times, from datasheet */
 typedef enum{
@@ -50,8 +44,6 @@ typedef enum{
     TIME_STATE_TRANSITION_PLL_ACTIVE = 1,   /**<  Transition time from PLL active state to another. */
 }radio_trx_timing_t;
 
-/*---------------------------------------------------------------------------*/
-PROCESS(rf231_process, "RF231 driver");
 /*---------------------------------------------------------------------------*/
 
 int rf231_init(void);
@@ -84,7 +76,10 @@ const struct radio_driver rf231_slotted_driver =
 int
 rf231_init(void)
 {
+	PeriodPos = 0;
+	PeriodCount = 0;
   hal_init();
+  process_start(rf231_slotted_process, NULL);
   return 1;
 }
 
@@ -151,27 +146,68 @@ rf231_on(void)
   return 1;
 }
 
+void rf231_slotted_IC_irqh(uint32_t capture)
+{
+	/* write IC value into the IC buffer and generate a IC event to process the new value*/
+#ifndef SLOTTED_KOORDINATOR
+	static uint32_t last_capture = 0;
+	/* set a new Output compare value */
+	PeriodBuffer[PeriodPos] = capture - last_capture;
+	last_capture = capture;
+	process_post(&rf231_slotted_process, INPUT_CAPTURE_EVENT, NULL);
+#endif /* SLOTTED_KOORDINATOR */
+
+}
+
+static void calculate_period()
+{
+	int i;
+	uint32_t AvgPeriod;
+
+	/* check if the last measured period was valid. If it was */
+	/* if the number of stored Periods is smaller than the max number of periods
+	 * only add it to the buffer.
+	 */
+	if (PeriodCount < NUM_PERIODS)
+	{
+		++PeriodCount;
+		++PeriodPos;
+	} else {
+		AvgPeriod = 0;
+		for (i=0; i < NUM_PERIODS; ++i)
+		{
+			AvgPeriod += PeriodBuffer[i];
+		}
+		AvgPeriod = AvgPeriod >> NUM_PERIODS_BASE; /** shift right to simulate division */
+		Period = AvgPeriod;
+		++PeriodPos;
+	}
+	if(PeriodPos >= NUM_PERIODS)
+	{
+		/* we reached the end of our buffer -> wrap around */
+		PeriodPos = 0;
+	}
+}
+
 /*---------------------------------------------------------------------------*/
 /* Process to handle input packets
  * Receive interrupts cause this process to be polled
  * It calls the core MAC layer which calls rf231_read to get the packet
  * rf231processflag can be printed in the main idle loop for debugging
  */
-#if 0
-uint8_t rf231processflag;
-#define RF231PROCESSFLAG(arg) rf231processflag=arg
-#else
-#define RF231PROCESSFLAG(arg)
-#endif
 
-PROCESS_THREAD(rf231_process, ev, data)
+PROCESS_THREAD(rf231_slotted_process, ev, data)
 {
-  int len;
   PROCESS_BEGIN();
-  RF231PROCESSFLAG(99);
 
   while(1) {
-    PROCESS_YIELD_UNTIL(ev == PROCESS_EVENT_POLL);
+	  PROCESS_WAIT_EVENT();
+	  if (ev == INPUT_CAPTURE_EVENT){
+		  /* process the new IC Value that has been stored in the PeriodBuffer
+		   * by the IRQ handler.
+		   */
+		  calculate_period();
+	  }
   }
 
   PROCESS_END();
