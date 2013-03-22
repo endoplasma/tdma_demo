@@ -1,5 +1,6 @@
 #include "rf231_slotted_hal.h"
 
+
 extern void rf231_slotted_IC_irqh(uint32_t capture);
 //extern void rf231_slotted_OC_irqh(void);
 
@@ -9,33 +10,44 @@ extern void rf231_slotted_IC_irqh(uint32_t capture);
 void TIMx_IRQHandler(void)
 {
   volatile uint32_t capture;
+#ifdef JITTER_SIMULATION
+  uint16_t jitter = 0;
+#endif /* JITTER_SIMULATION */
   if (TIMx->SR & TIM_IC_IRQ_FLAG)	/* Input Capture Interrupt detected */
-  {
-    capture = TIMx->CCR_IC;
-    TIMx->SR &= ~TIM_IC_IRQ_FLAG;
-    rf231_slotted_IC_irqh(capture);
-  }
+    {
+      /* store the capture value, reset the irq flag, and call the irqh */
+      capture = TIMx->CCR_IC;
+      TIMx->SR &= ~TIM_IC_IRQ_FLAG;
+      rf231_slotted_IC_irqh(capture);
+    }
   if (TIMx->SR & TIM_OC_IRQ_FLAG)	/* Output Capture Interrupt detected */
-  {
-	  /* Clear IRQ Flag*/
-	  TIMx->SR &= ~TIM_OC_IRQ_FLAG;
+    {
+      /* Clear IRQ Flag*/
+      TIMx->SR &= ~TIM_OC_IRQ_FLAG;
 #ifdef SLOTTED_KOORDINATOR
-	  /* Set Compare Value for next send and clear IRQ Flag	*/
-	  TIMx->CCR_OC=TIMx->CCR_OC + PERIOD;
+      /* Set Compare Value for next send and clear IRQ Flag	*/
+#ifdef JITTER_SIMULATION
+      /* generate random Jitter to simulate the effect */
+      /* mask the last 6 bit -> jitter of 64/Ticks_Per_Second */
+      jitter = random_rand();
+      jitter = (jitter & 0x3F);
+      TIMx->CCR_OC=TIMx->CCR_OC + PERIOD_TICKS + jitter - 32;
+#elseif /* JITTER_SIMULATION */
+      TIMx->CCR_OC=TIMx->CCR_OC + PERIOD_TICKS;
 #endif /* SLOTTED_KOORDINATOR */
-	  /* Generate Output Pulse by toggeling the output signal polarity
-	   * change compare mode output signal from High level to low to end the pulse */
-	  TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
-	  TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_2);
-	  /* set compare mode output signal back to high for the next period */
-	  TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
-	  TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_0);
-  }
+      /* Generate Output Pulse by toggeling the output signal polarity
+       * change compare mode output signal from High level to low to end the pulse */
+      TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+      TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_2);
+      /* set compare mode output signal back to high for the next period */
+      TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+      TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_0);
+    }
   else if (TIMx->SR & TIM_SR_UIF)
-  {
-    TIMx->SR &= ~TIM_SR_UIF;
-    // hal_time_isr_func();
-  }
+    {
+      TIMx->SR &= ~TIM_SR_UIF;
+      // hal_time_isr_func();
+    }
 }
 
 /**
@@ -56,7 +68,7 @@ void hal_update_oc_incr(uint32_t oc_value)
 
 /*--------------------------------------------------------------------------*/
 /**
- * Intialise the hardware
+ * Initialise the hardware
  * 
  */
 int
@@ -71,7 +83,7 @@ hal_init(void)
   /* Set Timer to disabled,upcounting,Edge-aligned,no prescaler */
   TIMx->CR1 = 0;
   TIMx->ARR = 0xFFFFFFFF;
-  TIMx->PSC = 84-1;
+  TIMx->PSC = TIM_PSC - 1;
   TIMx->EGR = TIM_EGR_UG;
 
   /* Reset/Disable All Capture and Compare Units */
@@ -103,7 +115,7 @@ hal_init(void)
   tmpccer |=  (CCER_OC_CCE | CCER_OC_CCP);
   TIMx->CCER = tmpccer;
 
-  TIMx->CCR_OC = PERIOD;
+  TIMx->CCR_OC = PERIOD_TICKS;
 
   /**
    * Set special function for Input and Output
@@ -152,6 +164,16 @@ hal_init(void)
   /* blank out function selections on IRQ pin and then rewrite with TIMx_AF */
   IRQ1PORT->AFR[IRQ1PIN >> 0x03] &= ~((uint32_t)0xF << ((uint32_t)((uint32_t)IRQ1PIN & (uint32_t)0x07) * 4)) ;
   IRQ1PORT->AFR[IRQ1PIN >> 0x03] |= ((uint32_t)TIMx_AF << ((uint32_t)((uint32_t)IRQ1PIN & (uint32_t)0x07) * 4)) ;
+
+  /**
+   * Initialise Random Number Generator to simulate the effect of
+   * jitter at Koordinator side
+   */
+#ifdef (JITTER_SIMULATION && SLOTTED_KOORDINATOR)
+  /* initialise with seed 0 - stm32f4 generats random number via
+     noise, we don need a seed */
+  random_init(0); 
+#endif
 
   /* Enable OC and IC Interrupt */
   TIMx->DIER |= TIM_OC_IE;
