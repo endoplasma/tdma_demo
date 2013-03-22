@@ -5,6 +5,7 @@
 /*============================ INCLUDE =======================================*/
 #include <stdint.h>
 #include <stdbool.h>
+#include "lib/random.h"
 #include "contiki-conf.h"
 #include <stm32f4xx.h>                  /* STM32F4xx Definitions              */
 
@@ -63,7 +64,16 @@
 #define TIMx_IRQHandler       TIM2_IRQHandler               /** Interrupt Handler */
 #define TIM_GPIO_MASk         0xFFFFFFCC                    /** PORT 0 and 3 */
 #define TIM_GPIO_MODE         0x00000022                    /** AF Mode for PORT 0 and 3 */
-#define TIM_GPIO_AF           0x00001001
+#define TIM_GPIO_AF           0x00001001                    /** The Alternate Function */
+/**
+ * Timer 2 is connected to the APB1 clock Source and runs with a
+ * frequency of 84 MHz.  We want a clock cycle length of 250 ns. This
+ * leads to a Prescaler Value of 84 MHz / 250 ns = 21.
+ */
+#define TIM_PSC               21                            /** Timer Prescaler Value */
+#define TIM_TICKS_PER_SECOND  84000000 / 21                 /** Timer ticks per second */
+
+
 /**
  * Input Capture Definitions
  */
@@ -108,9 +118,14 @@
 #define TIM_OC_OC_FLAG        TIM_SR_CC4OF                  /** Output Compare Overcapture */
 #define TIM_OC_IE             TIM_DIER_CC4IE                /** Output Compare Overcapture */
 
+/**
+ * Timing definitions
+ */
+#define PERIOD_MS             1000                          /** the Period length in ms */
+#define SLOT_MS               800                           /** the slot position in ms */
 
-#define PERIOD                1000
-#define SLOT				  800
+#define PERIOD_TICKS          PERIOD_MS * TIM_TICKS_PER_SECOND / 1000  /** the Period length in actual clock ticks */
+#define SLOT_TICKS            SLOT_MS * TIM_TICKS_PER_SECOND / 1000  /** the Period length in actual clock ticks */
 
 #define FILTER_FACTOR         (1/2)                         /** alpha value for median calculation via IIF */
 
