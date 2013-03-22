@@ -21,11 +21,14 @@ uint8_t volatile rf231_pending;
 /**
  * A struct to store information about the state and defines some basic global variables
  */
+typedef struct ringBuffer{
+  uint32_t Buff[NUM_PERIODS];              /** Array to store the last measured Periods */
+  uint8_t PutPos;                               /** Position to store the next measurement */
+  uint8_t Count;                                /** The number of stored Periods */
+}ringBuffer;
 
-static uint32_t PeriodBuffer[NUM_PERIODS];      	/** Array to store the last measured Periods */
-static uint8_t PeriodPos;					  		/** Position to store the next measurement */
-static uint8_t PeriodCount;                         /** The number of stored Periods */
-static uint32_t Period;                             /** The length of our send Period */
+uint32_t Period;                                /** The length of our send Period */
+static ringBuffer PeriodBuffer                  /** A ring buffer to store the last measured periods */
 
 
 /* RF231 hardware delay times, from datasheet */
@@ -73,11 +76,24 @@ const struct radio_driver rf231_slotted_driver =
   };
 
 /*---------------------------------------------------------------------------*/
+static void 
+ringbuffer_add(ringBuffer *buffer, uint32_t value)
+{
+  buffer->Buff[buffer->putPos] = value;
+  buffer->putPos = (buffer->putPos & PERIOD_BUFFER_MASK);
+  ++(buffer->Count);
+  if(buffer->Count > PERIOD_BUFFER_LENGTH) {
+    buffer->Count=PERIOD_BUFFER_LENGTH;
+  }
+}
+
+
+/*---------------------------------------------------------------------------*/
 int
 rf231_init(void)
 {
-	PeriodPos = 0;
-	PeriodCount = 0;
+  PeriodBuffer.PutPos = 0;
+  PeriodBuffer.Count = 0;
   hal_init();
   process_start(rf231_slotted_process, NULL);
   return 1;
@@ -148,45 +164,44 @@ rf231_on(void)
 
 void rf231_slotted_IC_irqh(uint32_t capture)
 {
-	/* write IC value into the IC buffer and generate a IC event to process the new value*/
+  /* write IC value into the IC buffer and generate a IC event to process the new value*/
 #ifndef SLOTTED_KOORDINATOR
-	static uint32_t last_capture = 0;
-	/* set a new Output compare value */
-	PeriodBuffer[PeriodPos] = capture - last_capture;
-	last_capture = capture;
-	process_post(&rf231_slotted_process, INPUT_CAPTURE_EVENT, NULL);
+  /* put the new value into our ringbuffer */
+  ringbuffer_add(&PeriodBuffer, capture);
+  process_post(&rf231_slotted_process, INPUT_CAPTURE_EVENT, NULL);
 #endif /* SLOTTED_KOORDINATOR */
-
 }
 
 static void calculate_period()
 {
-	int i;
-	uint32_t AvgPeriod;
+  int i;
+  uint32_t AvgPeriod;
 
-	/* check if the last measured period was valid. If it was */
-	/* if the number of stored Periods is smaller than the max number of periods
-	 * only add it to the buffer.
-	 */
-	if (PeriodCount < NUM_PERIODS)
-	{
-		++PeriodCount;
-		++PeriodPos;
-	} else {
-		AvgPeriod = 0;
-		for (i=0; i < NUM_PERIODS; ++i)
-		{
-			AvgPeriod += PeriodBuffer[i];
-		}
-		AvgPeriod = AvgPeriod >> NUM_PERIODS_BASE; /** shift right to simulate division */
-		Period = AvgPeriod;
-		++PeriodPos;
-	}
-	if(PeriodPos >= NUM_PERIODS)
-	{
-		/* we reached the end of our buffer -> wrap around */
-		PeriodPos = 0;
-	}
+  /* substract last stored value with the first sotred and divide by number of periods */
+  Period = (PeriodBuffer[PeriodBuffer->PutPos-1] - PeriodBuffer[PeriodBuffer->PutPos]) >> NUM_PERIODS_BASE;
+  /* check if the last measured period was valid. If it was */
+  /* if the number of stored Periods is smaller than the max number of periods
+   * only add it to the buffer.
+   */
+  if (PeriodCount < NUM_PERIODS)
+    {
+      ++PeriodCount;
+      ++PeriodPos;
+    } else {
+    AvgPeriod = 0;
+    for (i=0; i < NUM_PERIODS; ++i)
+      {
+	AvgPeriod += PeriodBuffer[i];
+      }
+    AvgPeriod = AvgPeriod >> NUM_PERIODS_BASE; /** shift right to simulate division */
+    Period = AvgPeriod;
+    ++PeriodPos;
+  }
+  if(PeriodPos >= NUM_PERIODS)
+    {
+      /* we reached the end of our buffer -> wrap around */
+      PeriodPos = 0;
+    }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -201,13 +216,16 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
   PROCESS_BEGIN();
 
   while(1) {
-	  PROCESS_WAIT_EVENT();
-	  if (ev == INPUT_CAPTURE_EVENT){
-		  /* process the new IC Value that has been stored in the PeriodBuffer
-		   * by the IRQ handler.
-		   */
-		  calculate_period();
-	  }
+    PROCESS_WAIT_EVENT();
+    if (ev == INPUT_CAPTURE_EVENT){
+      /* process the new IC Value that has been stored in the PeriodBuffer
+       * by the IRQ handler.
+       */
+      calculate_period();
+    }
+    if (ev ==BUTTON_PUSH_EVENT){
+	    
+    }
   }
 
   PROCESS_END();
