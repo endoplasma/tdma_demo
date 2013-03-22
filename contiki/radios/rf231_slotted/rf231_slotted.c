@@ -12,6 +12,7 @@
 #include "net/netstack.h"
 #include "sys/timetable.h"
 #include "lib/random.h"
+#include "dev/button-sensor.h"
 
 /*---------------------------------------------------------------------------*/
 PROCESS(rf231_slotted_process, "Slotted TDMA Driver");
@@ -22,13 +23,13 @@ uint8_t volatile rf231_pending;
  * A struct to store information about the state and defines some basic global variables
  */
 typedef struct ringBuffer{
-  uint32_t Buff[NUM_PERIODS];              /** Array to store the last measured Periods */
+  uint32_t Buff[NUM_PERIODS];                   /** Array to store the last measured Periods */
   uint8_t PutPos;                               /** Position to store the next measurement */
   uint8_t Count;                                /** The number of stored Periods */
 }ringBuffer;
 
 uint32_t Period;                                /** The length of our send Period */
-static ringBuffer PeriodBuffer                  /** A ring buffer to store the last measured periods */
+static ringBuffer PeriodBuffer;                 /** A ring buffer to store the last measured periods */
 
 
 /* RF231 hardware delay times, from datasheet */
@@ -79,8 +80,8 @@ const struct radio_driver rf231_slotted_driver =
 static void 
 ringbuffer_add(ringBuffer *buffer, uint32_t value)
 {
-  buffer->Buff[buffer->putPos] = value;
-  buffer->putPos = (buffer->putPos & PERIOD_BUFFER_MASK);
+  buffer->Buff[buffer->PutPos] = value;
+  buffer->PutPos = (buffer->PutPos & PERIOD_BUFFER_MASK);
   ++(buffer->Count);
   if(buffer->Count > PERIOD_BUFFER_LENGTH) {
     buffer->Count=PERIOD_BUFFER_LENGTH;
@@ -95,7 +96,7 @@ rf231_init(void)
   PeriodBuffer.PutPos = 0;
   PeriodBuffer.Count = 0;
   hal_init();
-  process_start(rf231_slotted_process, NULL);
+  process_start(&rf231_slotted_process, NULL);
   return 1;
 }
 
@@ -178,30 +179,34 @@ static void calculate_period()
   uint32_t AvgPeriod;
 
   /* substract last stored value with the first sotred and divide by number of periods */
-  Period = (PeriodBuffer[PeriodBuffer->PutPos-1] - PeriodBuffer[PeriodBuffer->PutPos]) >> NUM_PERIODS_BASE;
-  /* check if the last measured period was valid. If it was */
-  /* if the number of stored Periods is smaller than the max number of periods
-   * only add it to the buffer.
-   */
-  if (PeriodCount < NUM_PERIODS)
-    {
-      ++PeriodCount;
-      ++PeriodPos;
-    } else {
-    AvgPeriod = 0;
-    for (i=0; i < NUM_PERIODS; ++i)
-      {
-	AvgPeriod += PeriodBuffer[i];
-      }
-    AvgPeriod = AvgPeriod >> NUM_PERIODS_BASE; /** shift right to simulate division */
-    Period = AvgPeriod;
-    ++PeriodPos;
-  }
-  if(PeriodPos >= NUM_PERIODS)
-    {
-      /* we reached the end of our buffer -> wrap around */
-      PeriodPos = 0;
-    }
+  Period = (PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1] 
+	    - PeriodBuffer.Buff[PeriodBuffer.PutPos])  >> NUM_PERIODS_BASE;
+  
+
+
+  /* /\* check if the last measured period was valid. If it was *\/ */
+  /* /\* if the number of stored Periods is smaller than the max number of periods */
+  /*  * only add it to the buffer. */
+  /*  *\/ */
+  /* if (PeriodCount < NUM_PERIODS) */
+  /*   { */
+  /*     ++PeriodCount; */
+  /*     ++PeriodPos; */
+  /*   } else { */
+  /*   AvgPeriod = 0; */
+  /*   for (i=0; i < NUM_PERIODS; ++i) */
+  /*     { */
+  /* 	AvgPeriod += PeriodBuffer[i]; */
+  /*     } */
+  /*   AvgPeriod = AvgPeriod >> NUM_PERIODS_BASE; /\** shift right to simulate division *\/ */
+  /*   Period = AvgPeriod; */
+  /*   ++PeriodPos; */
+  /* } */
+  /* if(PeriodPos >= NUM_PERIODS) */
+  /*   { */
+  /*     /\* we reached the end of our buffer -> wrap around *\/ */
+  /*     PeriodPos = 0; */
+  /*   } */
 }
 
 /*---------------------------------------------------------------------------*/
@@ -223,8 +228,9 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
        */
       calculate_period();
     }
-    if (ev ==BUTTON_PUSH_EVENT){
-	    
+    if ((ev==sensors_event) && (data == &button_sensor)){
+      /* print the curretn information to usart */
+      printf("The Period is : %i\n\r", Period);
     }
   }
 

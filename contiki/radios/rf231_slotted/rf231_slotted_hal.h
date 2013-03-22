@@ -70,9 +70,14 @@
  * frequency of 84 MHz.  We want a clock cycle length of 250 ns. This
  * leads to a Prescaler Value of 84 MHz / 250 ns = 21.
  */
-#define TIM_PSC               21                            /** Timer Prescaler Value */
-#define TIM_TICKS_PER_SECOND  84000000 / 21                 /** Timer ticks per second */
-
+#define SYSTEM_CLOCK_FREQ     168000000	                    /** Clock Speed of the System */
+#define TIM_CLOCK_FREQ        (SYSTEM_CLOCK_FREQ / 2)       /** Frequency of the timer clock source */
+#define TIM_RESOLUTION_NS     250                           /** Resolution of the timer module. */
+#if (TIM_CLOCK_FREQ * TIM_RESOLUTION_NS % 1000000000)
+#error RF231 SLOTTED TDMA - desired TIM_RESOLUTION_NS is not possible
+#endif
+#define TIM_PSC               (TIM_CLOCK_FREQ / 1000 / 1000 * TIM_RESOLUTION_NS / 1000)   /** Timer Prescaler Value */
+//#define TIM_TICKS_PER_SECOND                   /** Timer ticks per second */
 
 /**
  * Input Capture Definitions
@@ -121,11 +126,13 @@
 /**
  * Timing definitions
  */
-#define PERIOD_MS             1000                          /** the Period length in ms */
-#define SLOT_MS               800                           /** the slot position in ms */
+#define TDMA_PERIOD_NS        1000000                          /** the Period length in ns */
+//#define TDMA_SLOTTIME_NS       800                           /** the slot position in ns */
 
-#define PERIOD_TICKS          PERIOD_MS * TIM_TICKS_PER_SECOND / 1000  /** the Period length in actual clock ticks */
-#define SLOT_TICKS            SLOT_MS * TIM_TICKS_PER_SECOND / 1000  /** the Period length in actual clock ticks */
+
+#define TDMA_PERIOD_TICKS     (TDMA_PERIOD_NS / TIM_RESOLUTION_NS)
+//#define PERIOD_TICKS          PERIOD_US * 1000 / TIM_RESOLUTION_NS  /** the Period length in actual clock ticks */
+//#define SLOT_TICKS            SLOT_US * 1000 /  TIM_RESOLUTION_NS  /** the Period length in actual clock ticks */
 
 #define FILTER_FACTOR         (1/2)                         /** alpha value for median calculation via IIF */
 
