@@ -127,12 +127,11 @@
  * Timing definitions
  */
 #define TDMA_PERIOD_NS        1000000                          /** the Period length in ns */
-//#define TDMA_SLOTTIME_NS       800                           /** the slot position in ns */
+#define TDMA_SLOTTIME_NS      300000                           /** the slot position in ns */
 
 
-#define TDMA_PERIOD_TICKS     (TDMA_PERIOD_NS / TIM_RESOLUTION_NS)
-//#define PERIOD_TICKS          PERIOD_US * 1000 / TIM_RESOLUTION_NS  /** the Period length in actual clock ticks */
-//#define SLOT_TICKS            SLOT_US * 1000 /  TIM_RESOLUTION_NS  /** the Period length in actual clock ticks */
+#define TDMA_PERIOD_TICKS     (TDMA_PERIOD_NS / TIM_RESOLUTION_NS)    /** The Period in timer ticks */
+#define TDMA_SLOT_TICKS       (TDMA_SLOTTIME_NS / TIM_RESOLUTION_NS)  /** The Slot Time in timer ticks */
 
 #define FILTER_FACTOR         (1/2)                         /** alpha value for median calculation via IIF */
 

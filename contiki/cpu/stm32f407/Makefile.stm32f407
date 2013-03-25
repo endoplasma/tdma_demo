@@ -149,12 +149,12 @@ CUSTOM_RULE_LINK = 1
 
 %.map: %.$(TARGET)
 	@echo Creating $@.$(TARGET).map ..
-	@%.$(TARGET) echo >> contiki-$(TARGET).map
-	@$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
+#	@%.$(TARGET) echo >> contiki-$(TARGET).map
+#	@$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
 
-%.bin: %.map
+%.bin: %.$(TARGET)
 	@echo Creating binary $@.bin ...
-	@$(OBJCOPY) $(OBJOPTS) $@.elf $@.bin 	
+	@$(OBJCOPY) $(OBJOPTS) $^.elf $@
 
 $(OBJECTDIR)/%.o: %.s
 	@echo Assembling $< ...
@@ -178,7 +178,13 @@ CUSTOM_RULE_C_TO_CO=1
 
 defines:
 	@echo Compiler Defines are:
-	@echo $(DEFINES)
+	@echo $(MY_DEFINES)
+	@echo 
+	@echo Sourcefiles are:
 	@echo $(CONTIKI_SOURCEFILES)
+	@echo 
+	@echo CPU Direcotries are:
 	@echo $(CONTIKI_CPU_DIRS)
-#	@echo $(CFLAGS)
+	@echo 
+	@echo CFALGS are:
+	@echo $(CFLAGS)
