@@ -82,6 +82,7 @@ ringbuffer_add(ringBuffer *buffer, uint32_t value)
 {
   buffer->Buff[buffer->PutPos] = value;
   buffer->PutPos = (buffer->PutPos & PERIOD_BUFFER_MASK);
+  ++(buffer->PutPos);
   ++(buffer->Count);
   if(buffer->Count > PERIOD_BUFFER_LENGTH) {
     buffer->Count=PERIOD_BUFFER_LENGTH;
@@ -169,6 +170,7 @@ void rf231_slotted_IC_irqh(uint32_t capture)
 #ifndef SLOTTED_KOORDINATOR
   /* put the new value into our ringbuffer */
   ringbuffer_add(&PeriodBuffer, capture);
+  hal_update_oc(capture + 1000);
   process_post(&rf231_slotted_process, INPUT_CAPTURE_EVENT, NULL);
 #endif /* SLOTTED_KOORDINATOR */
 }
@@ -181,8 +183,6 @@ static void calculate_period()
   /* substract last stored value with the first sotred and divide by number of periods */
   Period = (PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1] 
 	    - PeriodBuffer.Buff[PeriodBuffer.PutPos])  >> NUM_PERIODS_BASE;
-  
-
 
   /* /\* check if the last measured period was valid. If it was *\/ */
   /* /\* if the number of stored Periods is smaller than the max number of periods */
@@ -226,7 +226,9 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
       /* process the new IC Value that has been stored in the PeriodBuffer
        * by the IRQ handler.
        */
-      calculate_period();
+      //   calculate_period();
+      /* set a new oc event */
+
     }
     if ((ev==sensors_event) && (data == &button_sensor)){
       /* print the curretn information to usart */

@@ -1,8 +1,12 @@
 #include "rf231_slotted_hal.h"
 
-//#define SLOTTED_KOORDINATOR
-//#define JITTER_SIMULATION
+#ifdef SLOTTED_KOORDINATOR
+#warning Koordinator mode
+#endif
 
+#ifdef JITTER_SIMULATION
+#warning Simulation mode
+#endif
 
 extern void rf231_slotted_IC_irqh(uint32_t capture);
 //extern void rf231_slotted_OC_irqh(void);
@@ -205,7 +209,7 @@ hal_init(void)
   TIMx->SR &= ~TIM_IC_IRQ_FLAG;
   TIMx->SR &= ~TIM_OC_IRQ_FLAG;
   TIMx->DIER |= TIM_OC_IE;
-//  TIMx->DIER |= TIM_IC_IE;
+  TIMx->DIER |= TIM_IC_IE;
   
   IRQ_init_enable(TIMx_IRQn,1,0);
 

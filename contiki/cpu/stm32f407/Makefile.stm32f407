@@ -156,8 +156,8 @@ CUSTOM_RULE_LINK = 1
 
 %.map: %.$(TARGET)
 	@echo Creating $@.$(TARGET).map ..
-	@%.$(TARGET) echo >> contiki-$(TARGET).map
-	@$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
+#	@%.$(TARGET) echo >> contiki-$(TARGET).map
+#	@$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
 
 %.bin: %.$(TARGET)
 	@echo Creating binary $@ ...
@@ -191,7 +191,17 @@ CUSTOM_RULE_C_TO_CO=1
 
 defines:
 	@echo Compiler Defines are:
-	@echo $(DEFINES)
+	@echo $(MY_DEFINES)
+	@echo 
+	@echo Sourcefiles are:
 	@echo $(CONTIKI_SOURCEFILES)
+	@echo 
+	@echo CPU Direcotries are:
 	@echo $(CONTIKI_CPU_DIRS)
+<<<<<<< HEAD
 #	@echo $(CFLAGS)
+=======
+	@echo 
+	@echo CFALGS are:
+	@echo $(CFLAGS)
+>>>>>>> 6bef8f5ec4c611c82f9c93e7154de163b26033c8
