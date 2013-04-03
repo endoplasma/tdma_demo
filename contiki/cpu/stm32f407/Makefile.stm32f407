@@ -75,7 +75,8 @@ CONTIKI_SOURCEFILES        += $(CONTIKI_TARGET_SOURCEFILES)
 #GCC_NAME = /home/psp/sat/bin/arm-none-eabi-
 #GCC_NAME = /home/psp/Downloads/gcc-arm-none-eabi-4_7-2012q4/bin/arm-none-eabi-
 #GCC_NAME = /home/spliphi/sat2/bin/arm-none-eabi-
-GCC_NAME = ~/sat/bin/arm-none-eabi-
+#GCC_NAME = ~/sat/bin/arm-none-eabi-
+GCC_NAME = arm-none-eabi-
 CC	 = $(GCC_NAME)gcc
 LD       = $(GCC_NAME)gcc
 AS	 = $(GCC_NAME)gcc
@@ -130,6 +131,12 @@ LDFLAGS += -mcpu=cortex-m4 \
 SIZEFLAGS = -A
 OBJOPTS = -O binary
 
+### Flasher Options
+
+FLASHER = openocd
+FLASHER_OPTS = -f board/stm32f4discovery.cfg
+FLASHER_DIR = /home/spliphi/bin/openocd/share/openocd/scripts
+
 ### Custom rules
 
 OBJECTDIR = obj_$(TARGET)
@@ -152,9 +159,15 @@ CUSTOM_RULE_LINK = 1
 	@%.$(TARGET) echo >> contiki-$(TARGET).map
 	@$(SIZE) $(SIZEFLAGS) $@.elf >> contiki-$(TARGET).map
 
-%.bin: %.map
-	@echo Creating binary $@.bin ...
-	@$(OBJCOPY) $(OBJOPTS) $@.elf $@.bin 	
+%.bin: %.$(TARGET)
+	@echo Creating binary $@ ...
+	@$(OBJCOPY) $(OBJOPTS) $^.elf $@
+
+%.flash: %.bin
+	@echo Flashing "$^" to the hardware...
+	@cd $(FLASHER_DIR) && (../../../bin/$(FLASHER) $(FLASHER_OPTS)  -c halt)
+
+#"flash write_image erase udpPlug.stm32f4-discovery.bin 0x08000000")
 
 $(OBJECTDIR)/%.o: %.s
 	@echo Assembling $< ...

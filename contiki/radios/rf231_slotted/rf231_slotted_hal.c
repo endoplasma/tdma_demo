@@ -1,7 +1,7 @@
 #include "rf231_slotted_hal.h"
 
-#define SLOTTED_KOORDINATOR
-#define JITTER_SIMULATION
+//#define SLOTTED_KOORDINATOR
+//#define JITTER_SIMULATION
 
 
 extern void rf231_slotted_IC_irqh(uint32_t capture);
