@@ -8,19 +8,34 @@
 #include "lib/random.h"
 #include "contiki-conf.h"
 #include <stm32f4xx.h>                  /* STM32F4xx Definitions              */
+#include "rf231_slotted.h"
+#include "sys/process.h"
+#include <nvic.h>                  /* STM32F4xx Definitions              */
+#include <clock.h>
+#include "rf231_slotted_registermap.h"
 
-#define IRQ0PORT              GPIOA
-#define IRQ0PIN               0 /* PA0/TIM5_CH1 -> "TRIG"  - required for input capture!!! */
+
+
+/******************************************************************************
+ * AT86 RF231 PORT Definitions
+ ******************************************************************************
+ ****** IRQ, SLPTR and RST ***************************************************/
+#define IRQPORT               GPIOA
+#define IRQPIN                0 /* PA0/TIM2 CH1 - used in IC mode  */
 #define RSTPORT               GPIOA
-#define RSTPIN                1 /* PA1 -> "RST" */
-#define IRQ1PORT              GPIOA
-#define IRQ1PIN               3 /* PA3 -> "RT" */
-
+#define RSTPIN                1 /* PA1 */
+#define SLPTRPORT             GPIOA
+#define SLPTRPIN              3 /* PA3  TIM2 CH3 - used in OC mode */
+/****** SPI Ports *************************************************************/
 #define SPIPORT               GPIOA
-#define SSPIN                 4 /* PA4/SPI1_NSS -> "PROG" */
-#define SCKPIN                5 /* PA5/SPI1_SCK -> "CCLK" */
-#define MISOPIN               6 /* PA6/SPI1_MISO -> "DIN" */
-#define MOSIPIN               7 /* PA7/SPI1_MOSI -> "B/P" */
+#define SSPORT                SPIPORT
+#define SSPIN                 4 /* PA4/SPI1 /SEL Slave select  */
+#define SCKPORT               SPIPORT
+#define SCKPIN                5 /* PA5/SPI1 CLKM */
+#define MISOPORT              SPIPORT
+#define MISOPIN               6 /* PA6/SPI1 MISO */
+#define MOSIPORT              SPIPORT
+#define MOSIPIN               7 /* PA7/SPI1 MOSI */
 
 #define RCC_AHB1ENR_GPIOxEN   RCC_AHB1ENR_GPIOAEN
 
@@ -32,6 +47,7 @@
 #define RCC_AHB1ENR_PAGPIOxEN RCC_AHB1ENR_GPIOCEN
 #endif /* RF231_HAS_PA */
 
+/***** SPI Controller *********************************************************/
 #define SPIx                  SPI1
 #define SPI_APBxENR           APB2ENR
 #define RCC_APBxENR_SPIxEN    RCC_APB2ENR_SPI1EN
@@ -40,6 +56,7 @@
 #define SPIx_AF               5
 #define SPIx_BASE             SPI1_BASE
 
+/****** SPI DMA Controller ****************************************************/
 #define SPI_DMAx                        DMA2
 #define RCC_AHB1_SPI_DMAx               RCC_AHB1ENR_DMA2EN
 #define SPI_DMAx_STREAM_RX              DMA2_Stream0
@@ -52,11 +69,7 @@
 #define SPI_DMAx_STREAM_RX_IRQn         DMA2_Stream0_IRQn
 #define SPI_DMAx_STREAM_RX_IRQHandler   DMA2_Stream0_IRQHandler
 
-
-/****************** TIMER DEFINITIONS *********************************/
-/*
- *
- */
+/****** TIMER DEFINITIONS ****************************************************/
 #define TIMx                  TIM2                          /** The timer */
 #define TIMx_AF               1                             /** Alternate Function */
 #define RCC_APB1ENR_TIMxEN    RCC_APB1ENR_TIM2EN            /** Enable Timer 2 */
@@ -77,11 +90,18 @@
 #error RF231 SLOTTED TDMA - desired TIM_RESOLUTION_NS is not possible
 #endif
 #define TIM_PSC               (TIM_CLOCK_FREQ / 1000 / 1000 * TIM_RESOLUTION_NS / 1000)   /** Timer Prescaler Value */
-//#define TIM_TICKS_PER_SECOND                   /** Timer ticks per second */
+/****** Timing definitions ***********************************************/
+#define TDMA_PERIOD_NS        10000000                          /** the Period length in ns */
+#define TDMA_PERIOD_US        (TDMA_PERIOD_NS / 100);
+#define TDMA_SLOTTIME_NS      300000                           /** the slot position in ns */
+#define TDMA_PERIOD_TICKS     (TDMA_PERIOD_NS / TIM_RESOLUTION_NS)    /** The Period in timer ticks */
+#define TDMA_SLOT_TICKS       (TDMA_SLOTTIME_NS / TIM_RESOLUTION_NS)  /** The Slot Time in timer ticks */
+#define FILTER_FACTOR         (1/2)                         /** alpha value for median calculation via IIF */
 
-/**
- * Input Capture Definitions
- */
+/******************************************************************************
+ * Define the Timer Channels for Interrupt and Event generation
+ ******************************************************************************
+ * Input Capture Channel for Frame Timing                                     */
 #define CCR_IC                CCR1                          /** Input Register */
 #define CCMR_IC               CCMR1                         /** Register with IC Channel */
 #define CCMR_IC_MASK          (TIM_CCMR1_CC1S | \
@@ -95,13 +115,13 @@
                                TIM_CCER_CC1NP )             /** Input Capture Enable Mask */
 #define CCER_IC_CCE           TIM_CCER_CC1E                 /** Capture Enabled */
 #define CCER_IC_CCP           0                             /** Rising Edge */
-#define TIM_IC_IRQ_FLAG       TIM_SR_CC1IF                   /** Input Capture Interupt */
+#define TIM_IC_IRQ_FLAG       TIM_SR_CC1IF                  /** Input Capture Interupt */
 #define TIM_IC_OC_FLAG        TIM_SR_CC1OF                  /** Input Capture Overcapture */
 #define TIM_IC_IE             TIM_DIER_CC1IE                /** INput Capture Overcapture */
 
-/**
- * Output Compare Definitions
- */
+/******************************************************************************
+ * Output Compare Definitions - Send Timing
+ ******************************************************************************/
 #define CCR_OC                CCR4                          /** Capture Register */
 #define CCMR_OC               CCMR2                         /** Register with OC Channel */
 #define CCMR_OC_MASK          (TIM_CCMR2_CC4S | \
@@ -120,21 +140,148 @@
 #define CCER_OC_CCE           TIM_CCER_CC4E                 /** Output Enabled */
 #define CCER_OC_CCP           0                             /** Output High */
 #define TIM_OC_IRQ_FLAG       TIM_SR_CC4IF                  /** Output Compare Interupt */
-#define TIM_OC_OC_FLAG        TIM_SR_CC4OF                  /** Output Compare Overcapture */
-#define TIM_OC_IE             TIM_DIER_CC4IE                /** Output Compare Overcapture */
+#define TIM_OC_OC_FLAG        TIM_SR_CC4OF                  /** Output Compare Overcapture Flag */
+#define TIM_OC_IE             TIM_DIER_CC4IE                /** Output Compare Interrupt Enabled */
 
-/**
- * Timing definitions
+/******************************************************************************
+ * Definitions for the TX_MODE timer
+ ******************************************************************************/
+#define CCR_TX_MODE           CCR2                          /** Capture Register */
+#define CCMR_TX_MODE          CCMR1                         /** Register with OC Channel */
+#define CCMR_TX_MODE_MASK     (TIM_CCMR1_CC2S | \
+                               TIM_CCMR1_OC2FE | \
+                               TIM_CCMR1_OC2PE | \
+                               TIM_CCMR1_OC2M | \
+                               TIM_CCMR1_OC2CE )            /** Mask for Output Compare */
+
+#define CCMR_TX_MODE_CHAN          0                             /** OC4 as Output */
+#define CCMR_TX_MODE_FE            0                             /** fast mode disabled */
+#define CCMR_TX_MODE_PE            0                             /** no preload register */
+#define CCMR_TX_MODE_M             TIM_CCMR1_OC2M_0              /** active level on match */
+#define CCMR_TX_MODE_CE            0                             /** clear disabled */
+#define CCER_TX_MODE_MASK          (TIM_CCER_CC2E | \
+                                    TIM_CCER_CC2P | \
+                                    TIM_CCER_CC2NP )             /** Output Compare Enable Mask */
+#define CCER_TX_MODE_CCE           TIM_CCER_CC2E                 /** Output Enabled */
+#define CCER_TX_MODE_CCP           0                             /** Output High */
+#define TIM_TX_MODE_IRQ_FLAG       TIM_SR_CC2IF                  /** Output Compare Interupt */
+#define TIM_TX_MODE_OC_FLAG        TIM_SR_CC2OF                  /** Output Compare Overcapture */
+#define TIM_TX_MODE_IE             TIM_DIER_CC2IE                /** Output Compare Interrupt Enabled*/
+
+/******************************************************************************
+ * Definitions for the Beacon_missed timer
+ ******************************************************************************/
+#define CCR_BEACON_MISSED           CCR3                          /** Capture Register */
+#define CCMR_BEACON_MISSED          CCMR2                         /** Register with OC Channel */
+#define CCMR_BEACON_MISSED_MASK     (TIM_CCMR2_CC3S | \
+                                     TIM_CCMR2_OC3FE | \
+                                     TIM_CCMR2_OC3PE | \
+                                     TIM_CCMR2_OC3M | \
+                                     TIM_CCMR2_OC3CE )            /** Mask for Output Compare */
+
+#define CCMR_BEACON_MISSED_CHAN          0                             /** OC4 as Output */
+#define CCMR_BEACON_MISSED_FE            0                             /** fast mode disabled */
+#define CCMR_BEACON_MISSED_PE            0                             /** no preload register */
+#define CCMR_BEACON_MISSED_M             TIM_CCMR2_OC3M_0              /** active level on match */
+#define CCMR_BEACON_MISSED_CE            0                             /** clear disabled */
+#define CCER_BEACON_MISSED_MASK          (TIM_CCER_CC3E | \
+                                          TIM_CCER_CC3P | \
+                                          TIM_CCER_CC3NP )             /** Output Compare Enable Mask */
+#define CCER_BEACON_MISSED_CCE           TIM_CCER_CC3E                 /** Output Enabled */
+#define CCER_BEACON_MISSED_CCP           0                             /** Output High */
+#define TIM_BEACON_MISSED_IRQ_FLAG       TIM_SR_CC3IF                  /** Output Compare Interupt */
+#define TIM_BEACON_MISSED_OC_FLAG        TIM_SR_CC3OF                  /** Output Compare Overcapture */
+#define TIM_BEACON_MISSED_IE             TIM_DIER_CC3IE                /** Output Compare Interrupt Enabled*/
+
+
+/****************************************************************************
+ * Makro definitions
+ *****************************************************************************/
+/** This macro pulls the SS pin high. */
+#define HAL_SS_HIGH( )   ( SSPORT->BSRRL = ((uint32_t)1 << (uint32_t)SSPIN) ) 
+/** This macro pulls the SS pin low. */
+#define HAL_SS_LOW( )    ( SSPORT->BSRRH = ((uint32_t)1 << (uint32_t)SSPIN) ) 
+/** wait for some time and do nothing */
+#define delay_us( us )   ( clock_delay_usec( us ) )
+
+#define hal_set_slptr_high( ) ( SLPTRPORT->BSRRL = ((uint32_t)1 << (uint32_t)SLPTRPIN) ) /**< This macro pulls the SLP_TR pin high. */
+#define hal_set_slptr_low( )  ( SLPTRPORT->BSRRH = ((uint32_t)1 << (uint32_t)SLPTRPIN) ) /**< This macro pulls the SLP_TR pin low. */
+#define hal_get_slptr( )      !!( SLPTRPORT->IDR & ((uint32_t)1 << (uint32_t)SLPTRPIN) ) /**< Read current state of the SLP_TR pin (High/Low). */
+
+#define hal_set_rst_high( )   ( RSTPORT->BSRRL = ((uint32_t)1 << (uint32_t)RSTPIN) ) /**< This macro pulls the RST pin high. */
+#define hal_set_rst_low( )    ( RSTPORT->BSRRH = ((uint32_t)1 << (uint32_t)RSTPIN) ) /**< This macro pulls the RST pin low. */
+#define hal_get_rst( )        !!( RSTPORT->IDR & ((uint32_t)1 << (uint32_t)RSTPIN) ) /**< Read current state of the RST pin (High/Low). */
+
+/****************************************************************************
+ * Masks
+ *****************************************************************************/
+#define HAL_BAT_LOW_MASK       ( 0x80 ) /**< Mask for the BAT_LOW interrupt. */
+#define HAL_TRX_UR_MASK        ( 0x40 ) /**< Mask for the TRX_UR interrupt. */
+#define HAL_TRX_END_MASK       ( 0x08 ) /**< Mask for the TRX_END interrupt. */
+#define HAL_RX_START_MASK      ( 0x04 ) /**< Mask for the RX_START interrupt. */
+#define HAL_PLL_UNLOCK_MASK    ( 0x02 ) /**< Mask for the PLL_UNLOCK interrupt. */
+#define HAL_PLL_LOCK_MASK      ( 0x01 ) /**< Mask for the PLL_LOCK interrupt. */
+#define HAL_MIN_FRAME_LENGTH   ( 0x03 ) /**< A frame should be at least 3 bytes. */
+#define HAL_MAX_FRAME_LENGTH   ( 0x7F ) /**< A frame should no more than 127 bytes. */
+
+
+/****************************************************************************
+ * Typedefs
+ *****************************************************************************/
+/** \struct hal_rx_frame_t
+ *  \brief  This struct defines the rx data container.
+ *
+ *  \see hal_frame_read
  */
-#define TDMA_PERIOD_NS        1000000                          /** the Period length in ns */
-#define TDMA_SLOTTIME_NS      300000                           /** the slot position in ns */
+typedef struct{
+    uint8_t length;                       /**< Length of frame. */
+    uint8_t data[ HAL_MAX_FRAME_LENGTH ]; /**< Actual frame data. */
+    uint8_t lqi;                          /**< LQI value for received frame. */
+    bool crc;                             /**< Flag - did CRC pass for received frame? */
+} hal_rx_frame_t;
+
+/* RX_START event handler callback type. Is called with timestamp in
+ * IEEE 802.15.4 symbols and frame length. See
+ * hal_set_rx_start_event_handler(). */
+typedef void (*hal_rx_start_isr_event_handler_t)(uint32_t const isr_timestamp, uint8_t const frame_length);
+
+/* RRX_END event handler callback type. Is called with timestamp in
+ * IEEE 802.15.4 symbols and frame length. See
+ * hal_set_trx_end_event_handler(). */
+typedef void (*hal_trx_end_isr_event_handler_t)(uint32_t const isr_timestamp);
+
+typedef void (*rx_callback_t) (uint16_t data);
 
 
-#define TDMA_PERIOD_TICKS     (TDMA_PERIOD_NS / TIM_RESOLUTION_NS)    /** The Period in timer ticks */
-#define TDMA_SLOT_TICKS       (TDMA_SLOTTIME_NS / TIM_RESOLUTION_NS)  /** The Slot Time in timer ticks */
 
-#define FILTER_FACTOR         (1/2)                         /** alpha value for median calculation via IIF */
+/*============================ PROTOTYPES ====================================*/
+int hal_init( void );
+uint8_t hal_register_read( uint8_t address );
+void hal_register_write( uint8_t address, uint8_t value );
+uint8_t hal_subregister_read( uint8_t address, uint8_t mask, uint8_t position );
+void hal_subregister_write( uint8_t address, uint8_t mask, uint8_t position,
+                            uint8_t value );
 
-int hal_init(void);
+void hal_reset_flags( void );
+uint8_t hal_get_bat_low_flag( void );
+void hal_clear_bat_low_flag( void );
 
-#endif
+hal_trx_end_isr_event_handler_t hal_get_trx_end_event_handler( void );
+void hal_set_trx_end_event_handler( hal_trx_end_isr_event_handler_t trx_end_callback_handle );
+void hal_clear_trx_end_event_handler( void );
+
+hal_rx_start_isr_event_handler_t hal_get_rx_start_event_handler( void );
+void hal_set_rx_start_event_handler( hal_rx_start_isr_event_handler_t rx_start_callback_handle );
+void hal_clear_rx_start_event_handler( void );
+
+uint8_t hal_get_pll_lock_flag( void );
+void hal_clear_pll_lock_flag( void );
+
+void hal_frame_read(hal_rx_frame_t *rx_frame);
+void hal_frame_write( uint8_t *write_buffer, uint8_t length );
+//void hal_sram_read( uint8_t address, uint8_t length, uint8_t *data );
+//void hal_sram_write( uint8_t address, uint8_t length, uint8_t *data );
+
+
+
+#endif /* RF231_SLOTTED_HAL_H */

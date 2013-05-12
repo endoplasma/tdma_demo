@@ -516,6 +516,7 @@ flushrx(void)
 {
   rxframe[rxframe_head].length=0;
 }
+
 /*---------------------------------------------------------------------------*/
 static void
 on(void)
@@ -696,7 +697,7 @@ calibrate_rc_osc_32k(void)
         }
 
         counter--;
-    } while ((counter != 0) && (false == cal_ok));
+x    } while ((counter != 0) && (false == cal_ok));
 
      osccal_calibrated=OSCCAL;   
     if (true != cal_ok) {

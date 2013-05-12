@@ -165,9 +165,12 @@ CUSTOM_RULE_LINK = 1
 
 %.flash: %.bin
 	@echo Flashing "$^" to the hardware...
-	@cd $(FLASHER_DIR) && (../../../bin/$(FLASHER) $(FLASHER_OPTS)  -c halt)
+	@(cd $(FLASHER_DIR) && (../../../bin/$(FLASHER) $(FLASHER_OPTS)))
 
 #"flash write_image erase udpPlug.stm32f4-discovery.bin 0x08000000")
+
+oocd:
+	@(cd $(FLASHER_DIR) && (../../../bin/$(FLASHER) $(FLASHER_OPTS)))
 
 $(OBJECTDIR)/%.o: %.s
 	@echo Assembling $< ...
@@ -198,10 +201,7 @@ defines:
 	@echo 
 	@echo CPU Direcotries are:
 	@echo $(CONTIKI_CPU_DIRS)
-<<<<<<< HEAD
-#	@echo $(CFLAGS)
-=======
 	@echo 
 	@echo CFALGS are:
 	@echo $(CFLAGS)
->>>>>>> 6bef8f5ec4c611c82f9c93e7154de163b26033c8
+

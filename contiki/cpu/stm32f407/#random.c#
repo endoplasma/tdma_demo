@@ -49,7 +49,7 @@ void
 random_init(unsigned short seed)
 {
   RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;
-	/* Enable the RNG */
+  /* Enable the RNG */
 	RNG->CR |= RNG_CR_RNGEN;
 }
 /*---------------------------------------------------------------------------*/

@@ -58,7 +58,7 @@
 #ifndef FRAME_UTILS_H
 #define FRAME_UTILS_H
 
-#include "hal.h"
+#include "rf231_slotted_hal.h"
 
 /* Macros & Defines */
 
@@ -156,6 +156,17 @@ typedef struct{
     uint8_t length; /**< Length (in bytes) of created frame */
 } frame_result_t;
 
+typedef struct{
+  uint16_t cycleTime;
+  uint8_t maxClients;
+} beacon_header_t;
+
+
+typedef struct{
+  uint8_t payloadLength;
+} response_header_t;
+
+
 /** \brief Parameters used by the frame_tx_create() function.  These
  *  parameters are used in the 802.15.4 frame header.  See the 802.15.4
  *  specification for details.
@@ -168,6 +179,9 @@ typedef struct{
     uint16_t src_pid;     /**< Source PAN ID */
     addr_t src_addr;      /**< Source address */
     aux_hdr_t aux_hdr;    /**< Aux security header */
+#ifdef SLOTTED_KOORDINATOR
+    beacon_header_t bhr;  /**< beacon header */
+#end
     uint8_t *payload;     /**< Pointer to 802.15.4 frame payload */
     uint8_t payload_len;  /**< Length of payload field */
 } frame_create_params_t;

@@ -1,19 +1,29 @@
 # -*- makefile -*-
+.PHONY: rf231_slotted_hal.o rf231_slotted.o
 
 CONTIKI_PROJECT = udpPlug
-all: $(CONTIKI_PROJECT)
+all:  $(CONTIKI_PROJECT)
 
 flash: $(CONTIKI_PROJECT).flash
 
-client: $(CONTIKI_PROJECT) defines
-	@mv $(CONTIKI_PROJECT).$(TARGET).elf $(CONTIKI_PROJECT).CLIENT.efl
+start_ocd: oocd
+	@
+
+slotted_clear:
+	@
+
+##	rm $(OBJECTDIR)/rf231_slotted*
+
+client: slotted_clear $(CONTIKI_PROJECT)
+	@mv $(CONTIKI_PROJECT).$(TARGET).elf $(CONTIKI_PROJECT).CLIENT.elf
 
 koord : PROJECT_DEFINES += \
 	SLOTTED_KOORDINATOR \
-	JITTER_SIMULATION
 
-koord: $(CONTIKI_PROJECT)
-	@mv $(CONTIKI_PROJECT).$(TARGET).elf $(CONTIKI_PROJECT).KOORD.efl
+##	JITTER_SIMULATION
+
+koord: slotted_clear $(CONTIKI_PROJECT)
+	@mv $(CONTIKI_PROJECT).$(TARGET).elf $(CONTIKI_PROJECT).KOORD.elf
 
 bin: $(CONTIKI_PROJECT).bin
 	@

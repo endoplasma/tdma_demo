@@ -1,15 +1,14 @@
 # -*- makefile -*-
-
 # platform dependent files
 ARCH = button-sensor.c leds_arch.c leds.c sensors.c
 
 CONTIKI_TARGET_DIRS = . 
+
 ifndef CONTIKI_TARGET_MAIN
 CONTIKI_TARGET_MAIN = contiki-main.c 
 endif
 
 # rf chip
-#include $(CONTIKI)/cpu/avr/radio/rf230bb/Makefile.rf231
 include $(CONTIKI)/radios/rf231_slotted/Makefile.rf231_slotted
 
 CONTIKI_TARGET_SOURCEFILES += $(ARCH) $(CONTIKI_TARGET_MAIN)
@@ -23,7 +22,6 @@ PLATFORM_DEFINES = \
 	STDIN_LINE=3 \
 	STDERR_LINE=3 \
 	USART3_TX_USE_DMA1_CH4 \
-#	USE_USB \
 
 
 MCU=STM32F407

@@ -4,5 +4,5 @@ CFLAGS += -DIS_RF231=1 \
 	  -DRF231_HAS_PA=1 \
 
 CONTIKI_CPU_DIRS           += .
-CONTIKI_TARGET_SOURCEFILES += rf231_slotted.c rf231_slotted_hal.c
+CONTIKI_TARGET_SOURCEFILES += slotted_frame.c rf231_slotted.c rf231_slotted_hal.c 
 
