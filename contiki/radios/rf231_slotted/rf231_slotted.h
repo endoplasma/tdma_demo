@@ -48,10 +48,15 @@ typedef enum{
 #define RF230_SUPPORTED_INTERRUPT_MASK          ( MASK_TRX_END | MASK_RX_START )
 
 
-#define NUM_PERIODS           8            /** The number of Periods used to calculate the average. User only powers of 2 */
-#define NUM_PERIODS_BASE      3            /** log2(NUM_PERIOD) used for fast division */
-#define PERIOD_BUFFER_LENGTH  8            /** length of the period buffer power of 2 */
-#define PERIOD_BUFFER_MASK    NUM_PERIODS-1 /** Mask for fast Buffer boundary wrapping */
+#define NUM_PERIODS           8               /**< The number of Periods used to
+						   calculate the average. Use 
+						   only powers of 2 */
+#define NUM_PERIODS_BASE      3               /**< log2(NUM_PERIOD) used for fast 
+						   division */
+#define PERIOD_BUFFER_LENGTH  8               /**< length of the period buffer 
+						   power of 2 */
+#define PERIOD_BUFFER_MASK    NUM_PERIODS-1   /**< Mask for fast Buffer boundary 
+						   wrapping */
 
 /*============================ PROCESS EVENTS ================================*/
 #define INPUT_CAPTURE_EVENT           20

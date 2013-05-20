@@ -69,7 +69,9 @@
 #define SPI_DMAx_STREAM_RX_IRQn         DMA2_Stream0_IRQn
 #define SPI_DMAx_STREAM_RX_IRQHandler   DMA2_Stream0_IRQHandler
 
-/****** TIMER DEFINITIONS ****************************************************/
+/*******************************************************************************
+ ******** TIMER DEFINITIONS ****************************************************
+ *******************************************************************************/
 #define TIMx                  TIM2                          /** The timer */
 #define TIMx_AF               1                             /** Alternate Function */
 #define RCC_APB1ENR_TIMxEN    RCC_APB1ENR_TIM2EN            /** Enable Timer 2 */
@@ -91,12 +93,16 @@
 #endif
 #define TIM_PSC               (TIM_CLOCK_FREQ / 1000 / 1000 * TIM_RESOLUTION_NS / 1000)   /** Timer Prescaler Value */
 /****** Timing definitions ***********************************************/
-#define TDMA_PERIOD_NS        10000000                          /** the Period length in ns */
+#define TDMA_PERIOD_NS        3162000                                 /** the Period length in ns */
 #define TDMA_PERIOD_US        (TDMA_PERIOD_NS / 100);
-#define TDMA_SLOTTIME_NS      300000                           /** the slot position in ns */
+#define TDMA_SLOTTIME_NS      714000                                  /** the slot position in ns */
+#define TDMA_BEACON_FRAME_NS  895000
 #define TDMA_PERIOD_TICKS     (TDMA_PERIOD_NS / TIM_RESOLUTION_NS)    /** The Period in timer ticks */
 #define TDMA_SLOT_TICKS       (TDMA_SLOTTIME_NS / TIM_RESOLUTION_NS)  /** The Slot Time in timer ticks */
+#define TDMA_BEACON_TICKS     (TDMA_BEACON_FRAME_NS / TIM_RESOLUTION_NS)
 #define FILTER_FACTOR         (1/2)                         /** alpha value for median calculation via IIF */
+#define CLIENT_PROCESSING_TIME_NS            (105000)      /**< the processing time needed by the client */
+#define CLIENT_PROCESSING_TIME_TICKS         (CLIENT_PROCESSING_TIME_NS / TIM_RESOLUTION_NS)  /**< the processing time in ticks */
 
 /******************************************************************************
  * Define the Timer Channels for Interrupt and Event generation

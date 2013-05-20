@@ -164,16 +164,13 @@ int main (void) {                       /* Main Program                       */
   }
   leds_on(LEDS_BLUE);
 
-  //leds_on(LEDS_RED);
-  //leds_on(LEDS_YELLOW);
-  //leds_on(LEDS_GREEN);
-
   /* etimers must be started before ctimer_init */
   process_start(&etimer_process, NULL);
   ctimer_init();
 
   /* Start radio and radio receive process */
   NETSTACK_RADIO.init(); 
+  leds_on(LEDS_GREEN);
 
   /* makes use of cpu-specific RNG peripheral - no seed needed */
   random_init(0);
@@ -219,7 +216,7 @@ int main (void) {                       /* Main Program                       */
 #endif
 #endif /* ANNOUNCE_BOOT */
 
-  process_start(&tcpip_process, NULL);
+  /*  process_start(&tcpip_process, NULL); */
 
   /* Autostart other processes */
   autostart_start(autostart_processes);

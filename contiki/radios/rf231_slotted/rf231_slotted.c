@@ -29,23 +29,21 @@
 
 
 /*---------------------------------------------------------------------------*/
-/****************************************************************************
+/*****************************************************************************
  * Variable Definitions
  *****************************************************************************/
 PROCESS(rf231_slotted_process, "Slotted TDMA Driver");
 
 uint8_t volatile rf231_pending;
+static uint8_t buffer[RF230_MAX_TX_FRAME_LENGTH];   /**< frame buffer */
+static uint8_t sqn = 0;                             /**< the TDMA sequence Number */
+static uint16_t nodeAddress = 0;                    /**< the mac address of the node */
 
-/*---------------------------------------------------------------------------*/
-static uint8_t buffer[RF230_MAX_TX_FRAME_LENGTH];
-static uint8_t sqn = 0; /* the TDMA sequence Number */
-static uint16_t nodeAddress = 0;
 #ifdef SLOTTED_KOORDINATOR
-static uint8_t dummyPayload[BEACON_PAYLOAD_LENGTH];
+static uint8_t dummyPayload[BEACON_PAYLOAD_LENGTH]; /**< Koordinator dummy Paket */
 #else
-static uint8_t dummyPayload[RESPONSE_PAYLOAD_LENGTH];
+static uint8_t dummyPayload[RESPONSE_PAYLOAD_LENGTH]; /**< Client dummy Paket */
 #endif
-
 
 /**
  * A struct to store information about the state and defines some basic global variables
@@ -54,11 +52,13 @@ typedef struct ringBuffer{
   uint32_t Buff[NUM_PERIODS];                   /** Array to store the last measured Periods */
   uint8_t PutPos;                               /** Position to store the next measurement */
   uint8_t Count;                                /** The number of stored Periods */
-  
 }ringBuffer;
 
+uint32_t slot;
 uint32_t Period;                                /** The length of our send Period */
 static ringBuffer PeriodBuffer;                 /** A ring buffer to store the last measured periods */
+
+uint32_t lastBeaconTime;
 
 /**
  * A Struct that stores all Inforation used to configure the behaviour
@@ -76,9 +76,12 @@ struct protConf{
 				       beacons */ 
 }protocolConfig;
 
-/* Received frames are buffered to rxframe in the interrupt routine in hal.c */
+/* Received frames are buffered to rxframe in the interrupt routine in
+   hal.c */
 uint8_t rxframe_head,rxframe_tail;
 hal_rx_frame_t rxframe[RF230_CONF_RX_BUFFERS];
+
+extern uint32_t slotTime;
 
 /**
  * The possible FSM states of the rf231 slotted process
@@ -125,9 +128,9 @@ static void rf231_warm_reset(void);
 static void rf231_reset_state_machine(void);
 static void rf231_wait_idle(void);
 static bool rf231_is_ready_to_sendy(void);
-static uint8_t rf231_get_trx_state(void);
-static radio_status_t rf231_set_trx_state(uint8_t new_state);
-static void rf231_upload_packet(unsigned short payload_len);
+uint8_t rf231_get_trx_state(void);
+radio_status_t rf231_set_trx_state(uint8_t new_state);
+void rf231_upload_packet(unsigned short payload_len);
 
 static int rf231_read(void *buf, unsigned short bufsize);
 static int rf231_prepare(const void *data, unsigned short len);
@@ -153,7 +156,7 @@ static int create_packet(void);
     rf231_off
   };
  
-/******************************************************************************
+/*****************************************************************************
  * Radio Driver API Function definition
  *****************************************************************************/
 /*---------------------------------------------------------------------------*/
@@ -190,7 +193,18 @@ static int create_packet(void);
 }
 
 
-static void
+/*----------------------------------------------------------------------------*/
+/**
+ * \brief  turn off the radio.
+ * \param  void
+ * \return void 
+ * 
+ * This function turns the Hardware radio off. If there are any turn
+ * off hooks defined they will bi executed before the radio is shut
+ * down. Any ongoning transmission will be completed before the
+ * hardware os turned off.
+ */
+ static void
 off(void)
 {
 #ifdef RF230BB_HOOK_RADIO_OFF
@@ -217,8 +231,21 @@ off(void)
    ENERGEST_OFF(ENERGEST_TYPE_LISTEN);
 }
 
-/*---------------------------------------------------------------------------*/
-int
+
+/*----------------------------------------------------------------------------*/
+/**
+ * \brief  Initialise the rf231 slotted driver
+ * \param  void
+ * \return int - 1 if the initialisation was successfull
+ *               0 otherwise
+ * 
+ * This function initialises the rf231_slotted driver. Address
+ * configuration is done and the radio is turned on and starts sending
+ * beacons or listens for them (depending on KOORDINATOR or CLIENT
+ * Mode)
+ * 
+ */
+ int
 rf231_init(void)
 {
   uint8_t i;
@@ -246,14 +273,13 @@ rf231_init(void)
 #endif
 
 
-  /**
-   * create a dummy packet
-   */
+  /* create a dummy packet */
+#ifdef SLOTTED_KOORDINATOR
   buffer[0]=0xa0;            /* fcf*/
   buffer[1]=0x06;
   buffer[2]=0x00;            /* sqn */
-  buffer[3]=TDMA_PAN_ID_0;   /* src PAN ID */
-  buffer[4]=TDMA_PAN_ID_1;
+  buffer[3]=TDMA_PAN_ID_1;   /* src PAN ID */
+  buffer[4]=TDMA_PAN_ID_0;
   buffer[5]=(*((uint8_t*)0x1FFF7A10+2));       /* src address */
   buffer[6]=(*((uint8_t*)0x1FFF7A10+0));
   buffer[7]=0x03;                              /* cycle time */
@@ -273,14 +299,24 @@ rf231_init(void)
   buffer[21]=0x33;
   buffer[22]=0x00;        /* FCS */
   buffer[23]=0x00;
-
-  /* buffer[24]=0xa0; */
-  /* buffer[25]=0xa0; */
-  /* buffer[26]=0xa0; */
-  /* buffer[27]=0xa0; */
-  /* buffer[28]=0xa0; */
-  /* buffer[29]=0xa0; */
-  /* buffer[30]=0xa0; */
+#else
+  buffer[0]=0xa2;            /* fcf*/
+  buffer[1]=0x26;
+  buffer[2]=0x00;            /* sqn */
+  buffer[3]=TDMA_PAN_ID_1;   /* dst PAN ID */
+  buffer[4]=TDMA_PAN_ID_0;
+  buffer[5]=0x2e;            /* dst address of koord */
+  buffer[6]=0x1b;
+  buffer[7]=(*((uint8_t*)0x1FFF7A10+2));       /* dst address */
+  buffer[8]=(*((uint8_t*)0x1FFF7A10+0));
+  buffer[9]=0x04;                              /* payload length */
+  buffer[10]=0x11;          /* Payload start */
+  buffer[11]=0x22;
+  buffer[12]=0x33;
+  buffer[13]=0x44;
+  buffer[14]=0x00;         /* PL 2*/
+  buffer[15]=0x00;
+#endif
 
   /* Wait in case VCC just applied */
   delay_us(TIME_TO_ENTER_P_ON);
@@ -311,30 +347,31 @@ rf231_init(void)
   
   /* Verify that it is a supported version */
   /* Note gcc optimizes this away if DEBUG is not set! */
-  //ATMEGA128RFA1 - version 4, ID 31
   tvers = hal_register_read(RG_VERSION_NUM);
   tmanu = hal_register_read(RG_MAN_ID_0);
-
-  if ((tvers != RF230_REVA) && (tvers != RF230_REVB))
+  
+  if((tvers != RF230_REVA) && (tvers != RF230_REVB)) {
     PRINTF("rf230: Unsupported version %u\n",tvers);
-  if (tmanu != SUPPORTED_MANUFACTURER_ID) 
-    PRINTF("rf230: Unsupported manufacturer ID %u\n",tmanu);
-
+  }
+  if(tmanu != SUPPORTED_MANUFACTURER_ID) {
+    PRINTF("rf230: Unsupported manufacturer ID %u\n",tmanu); 
+  } 
   PRINTF("rf230: Version %u, ID %u\n",tvers,tmanu);
   
   rf231_warm_reset();
 
   process_start(&rf231_slotted_process, NULL);
 
-  /* create and upload the dummy packet */
-  //  create_packet();
-
-  //  rf231_upload_packet(24);
- /* Leave radio in on state (?)*/
   on();
-  /* hal_rx_frame_t* frame = rxframe; */
 
-  /* hal_frame_read(frame); */
+#ifdef SLOTTED_KOORDINATOR
+  rf231_set_trx_state(PLL_ON);
+  rf231_upload_packet(24);
+#else
+  rf231_set_trx_state(RX_AACK_ON);
+#endif
+
+  hal_register_write(RG_IRQ_MASK, RF230_SUPPORTED_INTERRUPT_MASK);
 
 #ifdef SLOTTED_KOORDINATOR
   hal_set_TX_Timer(TDMA_PERIOD_TICKS);
@@ -353,54 +390,42 @@ rf231_warm_reset(void) {
   hal_register_write(RG_IRQ_MASK, RF230_SUPPORTED_INTERRUPT_MASK);
   uint8_t status = hal_register_read(RG_IRQ_MASK);
 
-
   /* Set up number of automatic retries 0-15 (0 implies PLL_ON sends
-     instead of the extended TX_ARET mode */
+   * instead of the extended TX_ARET mode */
   hal_subregister_write(SR_MAX_FRAME_RETRIES, 0 );
  
- /* Set up carrier sense/clear channel assesment parameters for extended operating mode */
-  hal_subregister_write(SR_MAX_CSMA_RETRIES, 0 );//highest allowed retries
-  //  hal_register_write(RG_CSMA_BE, 0x80);       //min backoff exponent 0, max 8 (highest allowed)
-  // hal_register_write(RG_CSMA_SEED_0,hal_register_read(RG_PHY_RSSI) );//upper two RSSI reg bits RND_VALUE are random in rf231
- // hal_register_write(CSMA_SEED_1,42 );
+  /* Set up carrier sense/clear channel assesment parameters for
+   * extended operating mode */
+  hal_subregister_write(SR_MAX_CSMA_RETRIES, 0 );
 
-  /* CCA Mode Mode 1=Energy above threshold  2=Carrier sense only  3=Both 0=Either (RF231 only) */
-//hal_subregister_write(SR_CCA_MODE,1);  //1 is the power-on default
-
-  /* Carrier sense threshold (not implemented in RF230 or RF231) */
-// hal_subregister_write(SR_CCA_CS_THRES,1);
-
-/* disable auto acknowledge mode and set to Coordinator mode for
-   correct frame filtering */
-  hal_subregister_write(SR_AACK_DIS_ACK, 0 );
-  hal_subregister_write(SR_I_AM_COORD, 1 );
-
-  /**
-   * enable reserved frame filtering
-   */
-  /* hal_subregister_write(SR_AACK_FLTR_RES_FT, 1); */
-  /* hal_subregister_write(SR_AACK_UPLD_RES_FT, 1); */
-  
-/* #ifndef SLOTTED_KOORDINATOR */
-/*   /\* enable promiscious mode for testing *\/ */
-/*   hal_subregister_write(SR_AACK_PROM_MODE, 1); */
-/* #endif */
-
-  /**
-   * set the short address and panID
-   */
+  /* set the short address and panID */
   hal_subregister_write(SR_SHORT_ADDR_0, (*((uint8_t*)0x1FFF7A10+0)));  
-  hal_subregister_write(SR_SHORT_ADDR_0, (*((uint8_t*)0x1FFF7A10+2)));  
+  hal_subregister_write(SR_SHORT_ADDR_1, (*((uint8_t*)0x1FFF7A10+2)));  
   hal_subregister_write(SR_PAN_ID_0, TDMA_PAN_ID_0);
   hal_subregister_write(SR_PAN_ID_1, TDMA_PAN_ID_1); 
 
-  status = hal_register_read(RG_PAN_ID_0);
-  status = hal_register_read(RG_PAN_ID_1);
-  status = hal_register_read(RG_SHORT_ADDR_0);
-  status = hal_register_read(RG_SHORT_ADDR_1);
+  /* set IEEE address */
+  hal_subregister_write(SR_IEEE_ADDR_0, (*((uint8_t*)0x1FFF7A10+0)));
+  hal_subregister_write(SR_IEEE_ADDR_1, (*((uint8_t*)0x1FFF7A10+2)));
+  hal_subregister_write(SR_IEEE_ADDR_2, (*((uint8_t*)0x1FFF7A10+4)));
+  hal_subregister_write(SR_IEEE_ADDR_3, 0xfe);
+  hal_subregister_write(SR_IEEE_ADDR_4, 0xff);
+  hal_subregister_write(SR_IEEE_ADDR_5, 0x00);
+  hal_subregister_write(SR_IEEE_ADDR_6, 0x00);
+  hal_subregister_write(SR_IEEE_ADDR_7, 0x02);
 
+  /* frame version settings */
+  hal_subregister_write(SR_AACK_FVN_MODE, 3);
+  /* set as PAN koordiantor */
+  hal_subregister_write(SR_I_AM_COORD, 1 );
+  /* disable auto acknowledge mode */ 
+  hal_subregister_write(SR_AACK_DIS_ACK, 0 );  
+  /* enable reserved frame filtering */
+  hal_subregister_write(SR_AACK_FLTR_RES_FT, 1);
+  hal_subregister_write(SR_AACK_UPLD_RES_FT, 0);
 
-
+  /* enable promiscious mode for testing */
+  hal_subregister_write(SR_AACK_PROM_MODE, 1);
 
   /* Receiver sensitivity. If nonzero rf231/128rfa1 saves 0.5ma in rx mode */
   /* Not implemented on rf230 but does not hurt to write to it */
@@ -571,7 +596,7 @@ int i;
  *  \retval    RADIO_TIMED_OUT        The state transition could not be completed
  *                                  within resonable time.
  */
-static radio_status_t
+radio_status_t
 rf231_set_trx_state(uint8_t new_state)
 {
     uint8_t original_state;
@@ -729,6 +754,7 @@ params.bhdr.maxClients = MAX_CLIENTS;
   frame_tx_create(&params, &result);
 
   hal_frame_write(result.frame, result.length);
+
 }
 
 /*---------------------------------------------------------------------------*/
@@ -744,7 +770,7 @@ ringbuffer_add(ringBuffer *buffer, uint32_t value)
   }
 }
 
-static void
+void
 rf231_upload_packet(unsigned short payload_len)
 {
     hal_frame_write(buffer, payload_len);
@@ -752,7 +778,7 @@ rf231_upload_packet(unsigned short payload_len)
 
 /*---------------------------------------------------------------------------*/
 static uint32_t
-rinbuffer_get_last(ringBuffer *buffer)
+ringbuffer_get_last(ringBuffer *buffer)
 {
   return buffer->Buff[buffer->PutPos];
 }
@@ -859,8 +885,9 @@ void rf231_slotted_IC_irqh(uint32_t capture)
 #ifndef SLOTTED_KOORDINATOR
   /* store the new value into our ringbuffer */
   ringbuffer_add(&PeriodBuffer, capture);
+  lastBeaconTime = capture;
   //  hal_update_oc(capture + 1000);
-  process_post(&rf231_slotted_process, HANDLE_PACKET_EVENT, NULL);
+  //process_post(&rf231_slotted_process, HANDLE_PACKET_EVENT, NULL);
 #endif /* SLOTTED_KOORDINATOR */
 }
 
@@ -917,7 +944,11 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
        */
       //   calculate_period();
       /* set a new oc event */
-      hal_update_oc(PeriodBuffer.Buff[(PeriodBuffer.PutPos - 1) & PERIOD_BUFFER_MASK] + 1000);
+//      hal_update_oc(PeriodBuffer.Buff[(PeriodBuffer.PutPos - 1) & PERIOD_BUFFER_MASK] + 1000);
+    }
+    if(ev==HANDLE_PACKET_EVENT){
+      hal_frame_read(rxframe);
+      hal_update_TX_Mode_Timer(lastBeaconTime + slotTime - 50);
     }
 
     if ((ev==sensors_event) && (data == &button_sensor)){
