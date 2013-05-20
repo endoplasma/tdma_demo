@@ -34,69 +34,27 @@
  *****************************************************************************/
 PROCESS(rf231_slotted_process, "Slotted TDMA Driver");
 
-uint8_t volatile rf231_pending;
 static uint8_t buffer[RF230_MAX_TX_FRAME_LENGTH];   /**< frame buffer */
-static uint8_t sqn = 0;                             /**< the TDMA sequence Number */
-static uint16_t nodeAddress = 0;                    /**< the mac address of the node */
 
 #ifdef SLOTTED_KOORDINATOR
-static uint8_t dummyPayload[BEACON_PAYLOAD_LENGTH]; /**< Koordinator dummy Paket */
+static uint8_t txBuffer[BEACON_PAYLOAD_LENGTH]; /**< Koordinator dummy Paket */
 #else
-static uint8_t dummyPayload[RESPONSE_PAYLOAD_LENGTH]; /**< Client dummy Paket */
+static uint8_t txBuffer[RESPONSE_PAYLOAD_LENGTH]; /**< Client dummy Paket */
 #endif
-
-/**
- * A struct to store information about the state and defines some basic global variables
- */
-typedef struct ringBuffer{
-  uint32_t Buff[NUM_PERIODS];                   /** Array to store the last measured Periods */
-  uint8_t PutPos;                               /** Position to store the next measurement */
-  uint8_t Count;                                /** The number of stored Periods */
-}ringBuffer;
-
-uint32_t slot;
-uint32_t Period;                                /** The length of our send Period */
-static ringBuffer PeriodBuffer;                 /** A ring buffer to store the last measured periods */
-
-uint32_t lastBeaconTime;
-
-/**
- * A Struct that stores all Inforation used to configure the behaviour
- * of the TDMA Protocol.
- */
-struct protConf{
-  uint32_t numClients;             /** the nuber max number of
-				       connected clients */
-  uint32_t Period;                 /** The actual calulated Period */
-  uint32_t clientSlotLength;       /** Slot length for a Cient in us
-				       (192 + m*32 with m = length of
-				       the packet) */
-  uint32_t GuardInterval;          /** Guard INterval length in us */
-  uint32_t beaconCount;            /** number of consecutive received
-				       beacons */ 
-}protocolConfig;
 
 /* Received frames are buffered to rxframe in the interrupt routine in
    hal.c */
 uint8_t rxframe_head,rxframe_tail;
 hal_rx_frame_t rxframe[RF230_CONF_RX_BUFFERS];
 
+static ring_buffer_t PeriodBuffer;      /**< A ring buffer to store the
+					     last measured periods */
+uint32_t lastBeaconTime;
 extern uint32_t slotTime;
 
-/**
- * The possible FSM states of the rf231 slotted process
- */
-#define RF231_STATE_UNINIT           0 /** Uninitialised Statemachine */
-#define RF231_STATE_INACTIVE         1 /** Machine deactivated */
-#define RF231_STATE_IDLE             2 /** Koordinator idle */
-#define RF231_STATE_HANDLE_PACKET    3 /** Packet received, busy handling it */
-#define RF231_STATE_ACTIVE_PLL       4 /** PLL for sending activated */
-#define RF231_STATE_SEND             5 /** Sending a packet */
+static proto_conf_t rf231_slotted_config;
 
-#define RF231_STATE_SYNCHED          6 /** Client synchronised */
-#define RF231_STATE_UNSYNCHED        7 /** Client unsynchronised */
-#define RF231_STATE_BEACON_MISSED    8 /** Client detected a missed beacon */
-
+uint8_t sqn;
 
 uint8_t  volatile state = RF231_STATE_UNINIT;
 
@@ -253,23 +211,33 @@ rf231_init(void)
 
   PeriodBuffer.PutPos = 0;
   PeriodBuffer.Count = 0;
-  protocolConfig.GuardInterval = 0;
-  protocolConfig.Period = 0;
-  protocolConfig.numClients = 0;
-  protocolConfig.clientSlotLength = 0;
-  protocolConfig.beaconCount = 0;
+  rf231_slotted_config.clientProcessing = 0;
+  rf231_slotted_config.guardInterval = 0;
+  rf231_slotted_config.Period = 0;
+  rf231_slotted_config.numClients = 0;
+  rf231_slotted_config.clientSlotLength = 0;
+  rf231_slotted_config.beaconCount = 0;
+
+  switch(*((uint8_t*)0x1FFF7A10+0)){
+  case 0x3c:
+    rf231_slotted_config.slotOffsett = TDMA_BEACON_TICKS + CLIENT_PROCESSING_TIME_TICKS;
+    return;
+  case 0x24:
+    rf231_slotted_config.slotOffsett = TDMA_BEACON_TICKS + CLIENT_PROCESSING_TIME_TICKS + TDMA_SLOT_TICKS;
+    return;
+  case 0x2b:
+    rf231_slotted_config.slotOffsett = TDMA_BEACON_TICKS + CLIENT_PROCESSING_TIME_TICKS + 2 * TDMA_SLOT_TICKS;
+  default:
+    return;
+  }
 
   state = RF231_STATE_INACTIVE;
 
-/* set the address of this node */
-  nodeAddress = (((*((uint8_t*)0x1FFF7A10+2)) << 8) | (*((uint8_t*)0x1FFF7A10+0)) );
-
-
 /* set the dummy Payload with 0 bits */
 #ifdef SLOTTED_KOORDINATOR
-  memset(&dummyPayload, 0, sizeof(uint8_t) * BEACON_PAYLOAD_LENGTH);
+  memset(&txBuffer, 0, sizeof(uint8_t) * BEACON_PAYLOAD_LENGTH);
 #else
-  memset(&dummyPayload, 0, sizeof(uint8_t) * RESPONSE_PAYLOAD_LENGTH);
+  memset(&txBuffer, 0, sizeof(uint8_t) * RESPONSE_PAYLOAD_LENGTH);
 #endif
 
 
@@ -727,10 +695,10 @@ static int create_packet(void)
   /* Complete the addressing fields. */
   params.fcf.srcAddrMode = SHORTADDRMODE;
   params.src_pid = TDMA_PAN_ID;
-  params.src_addr.addr16 = nodeAddress;
+  //  params.src_addr.addr16 = ;
 
   /* Copy the payload data. */
-params.payload =  dummyPayload;
+params.payload =  txBuffer;
 
 #ifdef SLOTTED_KOORDINATOR
 params.bhdr.cycleTime = 1000;
@@ -759,7 +727,7 @@ params.bhdr.maxClients = MAX_CLIENTS;
 
 /*---------------------------------------------------------------------------*/
 static void 
-ringbuffer_add(ringBuffer *buffer, uint32_t value)
+ringbuffer_add(ring_buffer_t *buffer, uint32_t value)
 {
   buffer->Buff[buffer->PutPos] = value;
   buffer->PutPos = ((buffer->PutPos + 1) & PERIOD_BUFFER_MASK);
@@ -778,14 +746,14 @@ rf231_upload_packet(unsigned short payload_len)
 
 /*---------------------------------------------------------------------------*/
 static uint32_t
-ringbuffer_get_last(ringBuffer *buffer)
+ringbuffer_get_last(ring_buffer_t *buffer)
 {
   return buffer->Buff[buffer->PutPos];
 }
 
 /*---------------------------------------------------------------------------*/
 static uint32_t
-ringbuffer_clear(ringBuffer *buffer)
+ringbuffer_clear(ring_buffer_t *buffer)
 {
   buffer->Count = 0;
   buffer->PutPos = 0;
@@ -882,13 +850,9 @@ rf231_on(void)
 void rf231_slotted_IC_irqh(uint32_t capture)
 {
   /* write IC value into the IC buffer and generate a IC event to process the new value*/
-#ifndef SLOTTED_KOORDINATOR
   /* store the new value into our ringbuffer */
   ringbuffer_add(&PeriodBuffer, capture);
   lastBeaconTime = capture;
-  //  hal_update_oc(capture + 1000);
-  //process_post(&rf231_slotted_process, HANDLE_PACKET_EVENT, NULL);
-#endif /* SLOTTED_KOORDINATOR */
 }
 
 static void calculate_period()
@@ -897,32 +861,8 @@ static void calculate_period()
   uint32_t AvgPeriod;
 
   /* substract last stored value with the first sotred and divide by number of periods */
-  Period = (PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1] 
+  rf231_slotted_config.Period = (PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1] 
 	    - PeriodBuffer.Buff[PeriodBuffer.PutPos])  >> NUM_PERIODS_BASE;
-
-  /* /\* check if the last measured period was valid. If it was *\/ */
-  /* /\* if the number of stored Periods is smaller than the max number of periods */
-  /*  * only add it to the buffer. */
-  /*  *\/ */
-  /* if (PeriodCount < NUM_PERIODS) */
-  /*   { */
-  /*     ++PeriodCount; */
-  /*     ++PeriodPos; */
-  /*   } else { */
-  /*   AvgPeriod = 0; */
-  /*   for (i=0; i < NUM_PERIODS; ++i) */
-  /*     { */
-  /* 	AvgPeriod += PeriodBuffer[i]; */
-  /*     } */
-  /*   AvgPeriod = AvgPeriod >> NUM_PERIODS_BASE; /\** shift right to simulate division *\/ */
-  /*   Period = AvgPeriod; */
-  /*   ++PeriodPos; */
-  /* } */
-  /* if(PeriodPos >= NUM_PERIODS) */
-  /*   { */
-  /*     /\* we reached the end of our buffer -> wrap around *\/ */
-  /*     PeriodPos = 0; */
-  /*   } */
 }
 
 /*---------------------------------------------------------------------------*/
@@ -930,6 +870,15 @@ static void calculate_period()
  * Receive interrupts cause this process to be polled
  * It calls the core MAC layer which calls rf231_read to get the packet
  * rf231processflag can be printed in the main idle loop for debugging
+ * we need to handle the following EVENTS:
+ *
+ * INPUT_CAPTURE_EVENT
+ * HANDLE_PACKET_EVENT
+ * BEACON_MISSED_EVENT
+ * TX_MODE_TIMER_EVENT
+ * BEACON_RECEIVED_EVENT
+ * FRAME_SEND_EVENT
+ *
  */
 
 PROCESS_THREAD(rf231_slotted_process, ev, data)
@@ -939,12 +888,7 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
   while(1) {
     PROCESS_WAIT_EVENT();
     if (ev == INPUT_CAPTURE_EVENT){
-      /* process the new IC Value that has been stored in the PeriodBuffer
-       * by the IRQ handler.
-       */
-      //   calculate_period();
-      /* set a new oc event */
-//      hal_update_oc(PeriodBuffer.Buff[(PeriodBuffer.PutPos - 1) & PERIOD_BUFFER_MASK] + 1000);
+      hal_update_oc(lastBeaconTime + slotTime);
     }
     if(ev==HANDLE_PACKET_EVENT){
       hal_frame_read(rxframe);
@@ -953,7 +897,7 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
 
     if ((ev==sensors_event) && (data == &button_sensor)){
       /* print the curretn information to usart */
-      printf("The Period is : %i\n\r", Period);
+      printf("The Period is : %i\n\r", rf231_slotted_config.Period);
     }
   }
 

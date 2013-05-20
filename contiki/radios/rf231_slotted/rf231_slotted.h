@@ -12,34 +12,6 @@
 /*============================ EXTERN DEFINITIONS ============================*/
 extern const struct radio_driver rf231_slotted_driver;
 
-/*============================ TYPE DEFS =====================================*/
-#define RADIO_STATUS_START_VALUE                  ( 0x40 )
-
-/** \brief  This enumeration defines the possible return values for the TAT API
- *          functions.
- *
- *          These values are defined so that they should not collide with the
- *          return/status codes defined in the IEEE 802.15.4 standard.
- *
- */
-typedef enum{
-    RADIO_SUCCESS = RADIO_STATUS_START_VALUE,  /**< The requested service was performed successfully. */
-    RADIO_UNSUPPORTED_DEVICE,         /**< The connected device is not an Atmel AT86RF230. */
-    RADIO_INVALID_ARGUMENT,           /**< One or more of the supplied function arguments are invalid. */
-    RADIO_TIMED_OUT,                  /**< The requested service timed out. */
-    RADIO_WRONG_STATE,                /**< The end-user tried to do an invalid state transition. */
-    RADIO_BUSY_STATE,                 /**< The radio transceiver is busy receiving or transmitting. */
-    RADIO_STATE_TRANSITION_FAILED,    /**< The requested state transition could not be completed. */
-    RADIO_CCA_IDLE,                   /**< Channel is clear, available to transmit a new frame. */
-    RADIO_CCA_BUSY,                   /**< Channel busy. */
-    RADIO_TRX_BUSY,                   /**< Transceiver is busy receiving or transmitting data. */
-    RADIO_BAT_LOW,                    /**< Measured battery voltage is lower than voltage threshold. */
-    RADIO_BAT_OK,                     /**< Measured battery voltage is above the voltage threshold. */
-    RADIO_CRC_FAILED,                 /**< The CRC failed for the actual frame. */
-    RADIO_CHANNEL_ACCESS_FAILURE,     /**< The channel access failed during the auto mode. */
-    RADIO_NO_ACK,                     /**< No acknowledge frame was received. */
-}radio_status_t;
-
 /*============================ MACROS ========================================*/
 #define SUPPORTED_PART_NUMBER                   ( 2 )
 #define RF230_REVA                              ( 1 )
@@ -58,11 +30,25 @@ typedef enum{
 #define PERIOD_BUFFER_MASK    NUM_PERIODS-1   /**< Mask for fast Buffer boundary 
 						   wrapping */
 
+/*============================ STATEMACHINE STATES ===========================*/
+#define RF231_STATE_UNINIT           0 /** Uninitialised Statemachine */
+#define RF231_STATE_INACTIVE         1 /** Machine deactivated */
+#define RF231_STATE_IDLE             2 /** Koordinator idle */
+#define RF231_STATE_HANDLE_PACKET    3 /** Packet received, busy handling it */
+#define RF231_STATE_ACTIVE_PLL       4 /** PLL for sending activated */
+#define RF231_STATE_SEND             5 /** Sending a packet */
+
+#define RF231_STATE_SYNCHED          6 /** Client synchronised */
+#define RF231_STATE_UNSYNCHED        7 /** Client unsynchronised */
+#define RF231_STATE_BEACON_MISSED    8 /** Client detected a missed beacon */
+
 /*============================ PROCESS EVENTS ================================*/
 #define INPUT_CAPTURE_EVENT           20
 #define HANDLE_PACKET_EVENT           21
 #define BEACON_MISSED_EVENT           22
 #define TX_MODE_TIMER_EVENT           23
+#define BEACON_RECEIVED_EVENT         24
+#define FRAME_SEND_EVENT              25
 
 /*============================ TDMA PARAMETER ================================*/
 #define MAX_CLIENTS                   3
@@ -88,6 +74,85 @@ typedef enum{
 #define TDMA_PAN_ID_0                  (0x12)
 #define TDMA_PAN_ID_1                  (0xff)
 
+
+
+/*============================ TYPE DEFS =====================================*/
+#define RADIO_STATUS_START_VALUE                  ( 0x40 )
+
+/** \brief  This enumeration defines the possible return values for the TAT API
+ *          functions.
+ *
+ *          These values are defined so that they should not collide with the
+ *          return/status codes defined in the IEEE 802.15.4 standard.
+ *
+ */
+typedef enum{
+    RADIO_SUCCESS = RADIO_STATUS_START_VALUE,  /**< The requested service was
+						  performed successfully. */
+    RADIO_UNSUPPORTED_DEVICE,                  /**< The connected device is not
+						  an Atmel AT86RF230. */
+    RADIO_INVALID_ARGUMENT,                    /**< One or more of the supplied
+						  function arguments are
+						  invalid. */
+    RADIO_TIMED_OUT,                           /**< The requested service timed
+						  out. */
+    RADIO_WRONG_STATE,                         /**< The end-user tried to do an
+						  invalid state transition. */
+    RADIO_BUSY_STATE,                          /**< The radio transceiver is
+						  busy receiving or
+						  transmitting. */
+    RADIO_STATE_TRANSITION_FAILED,             /**< The requested state
+						  transition could not be
+						  completed. */
+    RADIO_CCA_IDLE,                            /**< Channel is clear, available
+						  to transmit a new frame. */
+    RADIO_CCA_BUSY,                            /**< Channel busy. */
+    RADIO_TRX_BUSY,                            /**< Transceiver is busy
+						  receiving or transmitting
+						  data. */
+    RADIO_BAT_LOW,                             /**< Measured battery voltage is
+						  lower than voltage
+						  threshold. */
+    RADIO_BAT_OK,                              /**< Measured battery voltage is
+						  above the voltage
+						  threshold. */
+    RADIO_CRC_FAILED,                          /**< The CRC failed for the
+						  actual frame. */
+    RADIO_CHANNEL_ACCESS_FAILURE,              /**< The channel access failed
+						  during the auto mode. */
+    RADIO_NO_ACK,                              /**< No acknowledge frame was
+						  received. */
+}radio_status_t;
+
+/**
+ * A Struct that stores all Inforation used to configure the behaviour
+ * of the TDMA Protocol.
+ */
+typedef struct{
+  uint32_t numClients;             /**< the nuber max number of connected
+				        clients */
+  uint32_t Period;                 /**< The actual calulated Period */
+  uint32_t clientSlotLength;       /**< Slot length for a Cient in us (192 +
+				        m*32 with m = length of the packet) */
+  uint32_t guardInterval;          /**< Guard INterval length in us */
+  uint32_t clientProcessing;       /**< The client Processing Time */
+  uint32_t slotOffsett;            /**< The actual slot offset to the received
+				        Beacon Fram */
+  uint32_t beaconCount;            /**< number of consecutive received
+				        beacons */ 
+}proto_conf_t;
+
+/**
+ * A struct to store information about the state and defines some basic global
+ * variables
+ */
+typedef struct ringBuffer{
+  uint32_t Buff[NUM_PERIODS];      /**< Array to store the last measured
+				      Periods */
+  uint8_t PutPos;                  /**< Position to store the next
+				      measurement */
+  uint8_t Count;                   /**< The number of stored Periods */
+}ring_buffer_t;
 
 
 #endif /* RF231_SLOTTED_H */

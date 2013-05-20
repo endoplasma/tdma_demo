@@ -4,6 +4,7 @@
 #include <clock.h>
 #include <string.h>                       /* for storing DMA data */
 #include "rf231_slotted_registermap.h"
+#include "rf231_slotted.h"
 
 
 #ifdef SLOTTED_KOORDINATOR
@@ -68,9 +69,13 @@ void rf230_interrupt(void);
 extern hal_rx_frame_t rxframe[RF230_CONF_RX_BUFFERS];
 extern uint8_t rxframe_head,rxframe_tail;
 
+extern uint8_t volatile state;
+
+extern proto_conf_t rf231_slotted_config;
+
 uint32_t slotTime;
 
-void hal_update_oc(uint32_t oc_value);
+void hal_set_oc(uint32_t oc_value);
 /*----------------------------------------------------------------------------*/
 /** \brief  This function reads data from one of the radio transceiver's registers.
  *
@@ -429,8 +434,10 @@ void TIMx_IRQHandler(void)
          ***************************************************/
 	capture = TIMx->CCR_IC;
 #ifndef SLOTTED_KOORDINATOR
-	hal_update_oc(capture+slotTime);
-	rf231_slotted_IC_irqh(capture);
+	if(state == RF231_STATE_IDLE){
+	  rf231_slotted_IC_irqh(capture);
+	  process_post(&rf231_slotted_process, INPUT_CAPTURE_EVENT, NULL);
+	} 
 #endif /* SLOTTED_KOORDINATOR */
 
       } else if (interrupt_source & HAL_TRX_END_MASK){
@@ -438,10 +445,12 @@ void TIMx_IRQHandler(void)
          * TRX END Interrupt
          ***************************************************/
 #ifndef SLOTTED_KOORDINATOR
-	process_post(&rf231_slotted_process, HANDLE_PACKET_EVENT, NULL);
-	/* rf231_set_trx_state(PLL_ON); */
-	/* rf231_upload_packet(16); */
-#endif
+	if(state == RF231_STATE_IDLE){
+	  process_post(&rf231_slotted_process, HANDLE_PACKET_EVENT, NULL);
+	} else if(state == RF231_STATE_SEND){
+	  process_post(&rf231_slotted_process, FRAME_SEND_EVENT, NULL);
+	}
+#endif /* SLOTTED_KOORDINATOR */
       }
     }
   else if (TIMx->SR & TIM_OC_IRQ_FLAG)
@@ -451,10 +460,6 @@ void TIMx_IRQHandler(void)
        *******************************************/
       /* Clear IRQ Flag*/
       TIMx->SR &= ~TIM_OC_IRQ_FLAG;
-#ifndef SLOTTED_KOORDINATOR
-      /* go back to Rx aack mode */
-      rf231_set_trx_state(PLL_ON);
-#endif
 
 #ifdef SLOTTED_KOORDINATOR
       /* Set Compare Value for next send and clear IRQ Flag	*/
@@ -471,6 +476,7 @@ void TIMx_IRQHandler(void)
 
       TIMx->CCR_OC=TIMx->CCR_OC + TDMA_PERIOD_TICKS + jitter - JITTER_TICKS;
 #else /* JITTER_SIMULATION */
+      /* set the next BEACON send time */
       TIMx->CCR_OC=TIMx->CCR_OC + TDMA_PERIOD_TICKS;
 #endif /* JITTER_SIMULATION */
 #endif /* SLOTTED_KOORDINATOR */
@@ -503,11 +509,10 @@ void TIMx_IRQHandler(void)
       process_post(&rf231_slotted_process, BEACON_MISSED_EVENT, NULL);
     }
 #endif
-  
   else if (TIMx->SR & TIM_TX_MODE_IRQ_FLAG)
     {
       /******************************************
-       * Beacon Missed Timer expired
+       * TX_MODE Timer expired
        *******************************************/
       /* Clear IRQ Flag*/
       TIMx->SR &= ~TIM_TX_MODE_IRQ_FLAG;
@@ -518,7 +523,7 @@ void TIMx_IRQHandler(void)
 /**
  * set a new Output compare Value
  */
-void hal_update_oc(uint32_t oc_value)
+void hal_set_oc(uint32_t oc_value)
 {
   TIMx->CCR_OC=oc_value;
 }
@@ -526,7 +531,7 @@ void hal_update_oc(uint32_t oc_value)
 /**
  * add a value to the current OC value
  */
-void hal_update_oc_incr(uint32_t oc_value)
+void hal_update_oc(uint32_t oc_value)
 {
   TIMx->CCR_OC=TIMx->CCR_OC + oc_value;
 }
@@ -625,7 +630,7 @@ hal_init(void)
   /* enable GPIO Clocks */
   RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
 
-  /**
+  /*
    * Initialise the Pins used for the AT86RF231
    * We need:
    * RST
@@ -633,7 +638,7 @@ hal_init(void)
    * SLP_TR
    * SPI PINS (MISO MOSI SEL SCLK)
    */
-  /** Enable the SPI clock */
+  /* Enable the SPI clock */
   RCC->SPI_APBxENR |= RCC_APBxENR_SPIxEN;
 
   /******************************************************************************
@@ -711,7 +716,7 @@ hal_init(void)
 
 
   /******************************************************************************
-   * Cotroll PIN  Configuration
+   * Controll PIN  Configuration
    ******************************************************************************/
   /** RST pin configuration */
   RSTPORT->MODER &= ~((uint32_t)0x3 << ((uint32_t)RSTPIN * 2));	/* unselect mode */
@@ -837,28 +842,7 @@ hal_init(void)
   TIMx->DIER |= TIM_BEACON_MISSED_IE;
 #endif
 
-  
   IRQ_init_enable(TIMx_IRQn,1,0);
-
-
-  //  HAL_ENABLE_OVERFLOW_INTERRUPT();
-
-  switch(*((uint8_t*)0x1FFF7A10+0)){
-  case 0x3c:
-    slotTime = TDMA_BEACON_TICKS;
-    return;
-  case 0x24:
-    slotTime = TDMA_BEACON_TICKS + TDMA_SLOT_TICKS;
-    return;
-  case 0x2b:
-    slotTime = TDMA_BEACON_TICKS + 2 * TDMA_SLOT_TICKS;
-  default:
-    return;
-  }
-
-  slotTime = slotTime + CLIENT_PROCESSING_TIME_TICKS;
-    
-
 
   return 1;
 }
