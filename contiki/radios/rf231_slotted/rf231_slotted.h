@@ -61,6 +61,8 @@ extern const struct radio_driver rf231_slotted_driver;
 #define BEACON_PAYLOAD_LENGTH          (MAX_CLIENTS * PAYLOAD_PER_CLIENT)
 #define RESPONSE_PAYLOAD_LENGTH        (MAX_RESPONSE_PAYLOAD)
 
+#define BEACON_LENGTH                 (BEACON_HEADER_LENGTH + BEACON_PAYLOAD_LENGTH)
+#define RESPONSE_LENGTH               (RESPONSE_HEADER_LENGTH + RESPONSE_PAYLOAD_LENGTH)
 
             
 #ifdef SLOTTED_KOORDINATOR

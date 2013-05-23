@@ -13,6 +13,7 @@
 #include <nvic.h>                  /* STM32F4xx Definitions              */
 #include <clock.h>
 #include "rf231_slotted_registermap.h"
+#include "rf231_slotted.h"
 
 
 
@@ -92,17 +93,35 @@
 #error RF231 SLOTTED TDMA - desired TIM_RESOLUTION_NS is not possible
 #endif
 #define TIM_PSC               (TIM_CLOCK_FREQ / 1000 / 1000 * TIM_RESOLUTION_NS / 1000)   /** Timer Prescaler Value */
-/****** Timing definitions ***********************************************/
-#define TDMA_PERIOD_NS        3162000                                 /** the Period length in ns */
+
+
+/******************************************************************************
+ * TDMA Timing definitions
+ ******************************************************************************/
+#define PHY_TIME_PER_BYTE_NS                 (32000)
+#define PHY_SYNCH_HEADER_NS                  (192000)
+
+#define TDMA_SLOTTIME_NS                     (714000)                                  /** the slot position in ns */
+#define TDMA_BEACON_FRAME_NS                 (PHY_SYNCH_HEADER_NS + BEACON_LENGTH * PHY_TIME_PER_BYTE_NS)
+#define TDMA_RESPONSE_FRAME_NS               (PHY_SYNCH_HEADER_NS + RESPONSE_LENGTH * PHY_TIME_PER_BYTE_NS)
+
+#define CLIENT_PROCESSING_TIME_NS            (105000)      /**< the processing time needed by the client */
+#define KOORD_PROCESSING_TIME_NS             (105000)      /**< the processing time needed by the client */
+
+#define TDMA_GUARD_TIME_NS                   (10000)
+
+#define HARDWARE_DELAY_NS                    (16000)
+
+#define TDMA_PERIOD_NS        (TDMA_BEACON_FRAME_NS + CLIENT_PROCESSING_TIME_NS + (MAX_CLIENTS * (TDMA_RESPONSE_FRAME_NS + TDMA_GUARD_TIME_NS)) + KOORD_PROCESSING_TIME_NS)
 #define TDMA_PERIOD_US        (TDMA_PERIOD_NS / 100);
-#define TDMA_SLOTTIME_NS      714000                                  /** the slot position in ns */
-#define TDMA_BEACON_FRAME_NS  895000
 #define TDMA_PERIOD_TICKS     (TDMA_PERIOD_NS / TIM_RESOLUTION_NS)    /** The Period in timer ticks */
+#define CLIENT_PROCESSING_TIME_TICKS         (CLIENT_PROCESSING_TIME_NS / TIM_RESOLUTION_NS)  /**< the processing time in ticks */
+#define KOORD_PROCESSING_TIME_TICKS          (CLIENT_PROCESSING_TIME_NS / TIM_RESOLUTION_NS)  /**< the processing time in ticks */
 #define TDMA_SLOT_TICKS       (TDMA_SLOTTIME_NS / TIM_RESOLUTION_NS)  /** The Slot Time in timer ticks */
 #define TDMA_BEACON_TICKS     (TDMA_BEACON_FRAME_NS / TIM_RESOLUTION_NS)
-#define FILTER_FACTOR         (1/2)                         /** alpha value for median calculation via IIF */
-#define CLIENT_PROCESSING_TIME_NS            (105000)      /**< the processing time needed by the client */
-#define CLIENT_PROCESSING_TIME_TICKS         (CLIENT_PROCESSING_TIME_NS / TIM_RESOLUTION_NS)  /**< the processing time in ticks */
+#define HARDWARE_DELAY_TICKS                (HARDWARE_DELAY_NS / TIM_RESOLUTION_NS)
+
+#define FILTER_FACTOR                        (1/2)                         /** alpha value for median calculation via IIF */
 
 /******************************************************************************
  * Define the Timer Channels for Interrupt and Event generation
@@ -163,7 +182,7 @@
 #define CCMR_TX_MODE_CHAN          0                             /** OC4 as Output */
 #define CCMR_TX_MODE_FE            0                             /** fast mode disabled */
 #define CCMR_TX_MODE_PE            0                             /** no preload register */
-#define CCMR_TX_MODE_M             TIM_CCMR1_OC2M_0              /** active level on match */
+#define CCMR_TX_MODE_M             0                             /** freeze the output */
 #define CCMR_TX_MODE_CE            0                             /** clear disabled */
 #define CCER_TX_MODE_MASK          (TIM_CCER_CC2E | \
                                     TIM_CCER_CC2P | \

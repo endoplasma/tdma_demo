@@ -143,8 +143,10 @@ static int create_packet(void);
   * otherwise start listening */
 #ifdef SLOTTED_KOORDINATOR
   rf231_set_trx_state(PLL_ON);
+  state = RF231_STATE_SEND;
 #else /* SLOTTED_KOORDINATOR */
   rf231_set_trx_state(RX_AACK_ON);
+  state = RF231_STATE_IDLE;
 #endif /* SLOTTED_KOORDINATOR */
 
   rf231_wait_idle();
@@ -208,6 +210,7 @@ rf231_init(void)
 {
   uint8_t i;
   uint8_t tvers, tmanu;
+  uint8_t address_0;
 
   PeriodBuffer.PutPos = 0;
   PeriodBuffer.Count = 0;
@@ -218,18 +221,21 @@ rf231_init(void)
   rf231_slotted_config.clientSlotLength = 0;
   rf231_slotted_config.beaconCount = 0;
 
-  switch(*((uint8_t*)0x1FFF7A10+0)){
-  case 0x3c:
+  /* set the correct slot for a client. Use the last byte of the client number
+   * and set a hardcoded offset. */
+#ifndef SLOTTED_KOORDINATOR
+  address_0 = *((uint8_t*)0x1FFF7A10+0);          /* read the last byte of node
+						   * Number */
+  if(address_0 == 0x3c){
     rf231_slotted_config.slotOffsett = TDMA_BEACON_TICKS + CLIENT_PROCESSING_TIME_TICKS;
-    return;
-  case 0x24:
+  } else if(address_0 == 0x2a){
     rf231_slotted_config.slotOffsett = TDMA_BEACON_TICKS + CLIENT_PROCESSING_TIME_TICKS + TDMA_SLOT_TICKS;
-    return;
-  case 0x2b:
+  } else if(address_0 == 0x2b){
     rf231_slotted_config.slotOffsett = TDMA_BEACON_TICKS + CLIENT_PROCESSING_TIME_TICKS + 2 * TDMA_SLOT_TICKS;
-  default:
-    return;
+  } else {
+    rf231_slotted_config.slotOffsett = TDMA_BEACON_TICKS + CLIENT_PROCESSING_TIME_TICKS + 2 * TDMA_SLOT_TICKS;
   }
+#endif /* SLOTTED_KOORDINATOR */
 
   state = RF231_STATE_INACTIVE;
 
@@ -278,7 +284,7 @@ rf231_init(void)
   buffer[7]=(*((uint8_t*)0x1FFF7A10+2));       /* dst address */
   buffer[8]=(*((uint8_t*)0x1FFF7A10+0));
   buffer[9]=0x04;                              /* payload length */
-  buffer[10]=0x11;          /* Payload start */
+  buffer[10]=0x00;          /* Payload start */
   buffer[11]=0x22;
   buffer[12]=0x33;
   buffer[13]=0x44;
@@ -888,13 +894,34 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
   while(1) {
     PROCESS_WAIT_EVENT();
     if (ev == INPUT_CAPTURE_EVENT){
-      hal_update_oc(lastBeaconTime + slotTime);
+      // hal_set_oc(lastBeaconTime + rf231_slotted_config.slotOffsett + 1000);
     }
     if(ev==HANDLE_PACKET_EVENT){
       hal_frame_read(rxframe);
-      hal_update_TX_Mode_Timer(lastBeaconTime + slotTime - 50);
+      if(rxframe[0].data[0] == 0xa0) {
+	hal_set_oc(lastBeaconTime + rf231_slotted_config.slotOffsett - HARDWARE_DELAY_TICKS);
+	state = RF231_STATE_SEND;
+	rf231_set_trx_state(PLL_ON);
+	rf231_upload_packet(16);
+	hal_set_TX_Mode_Timer(lastBeaconTime + TDMA_PERIOD_TICKS - KOORD_PROCESSING_TIME_TICKS);
+      }
     }
-
+    if(ev==TX_MODE_TIMER_EVENT){
+#ifdef SLOTTED_KOORDINATOR
+      state = RF231_STATE_SEND;
+      rf231_set_trx_state(PLL_ON);
+#else /* SLOTTED_KOORDINATOR */
+      state = RF231_STATE_IDLE;
+      rf231_set_trx_state(RX_AACK_ON);
+#endif /* SLOTTED_KOORDINATOR */
+    }
+    if(ev==FRAME_SEND_EVENT){
+#ifdef SLOTTED_KOORDINATOR
+      state = RF231_STATE_IDLE;
+      rf231_set_trx_state(RX_AACK_ON);
+      hal_set_TX_Mode_Timer(hal_get_oc() - KOORD_PROCESSING_TIME_TICKS);
+#endif
+    }
     if ((ev==sensors_event) && (data == &button_sensor)){
       /* print the curretn information to usart */
       printf("The Period is : %i\n\r", rf231_slotted_config.Period);

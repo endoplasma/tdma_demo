@@ -1,5 +1,5 @@
 # -*- makefile -*-
-.PHONY: rf231_slotted_hal.o rf231_slotted.o
+.PHONY: rf231_slotted_hal.o rf231_slotted.o slotted_clear
 
 CONTIKI_PROJECT = udpPlug
 all:  $(CONTIKI_PROJECT)
@@ -10,9 +10,9 @@ start_ocd: oocd
 	@
 
 slotted_clear:
-	@
-
-##	rm $(OBJECTDIR)/rf231_slotted*
+	@ echo -n removing slotted objects...
+	@-rm -f $(OBJECTDIR)/rf231_slotted*
+	@ echo " done."	
 
 client: slotted_clear $(CONTIKI_PROJECT)
 	@mv $(CONTIKI_PROJECT).$(TARGET).elf $(CONTIKI_PROJECT).CLIENT.elf

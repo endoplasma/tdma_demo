@@ -444,13 +444,11 @@ void TIMx_IRQHandler(void)
 	/***************************************************
          * TRX END Interrupt
          ***************************************************/
-#ifndef SLOTTED_KOORDINATOR
 	if(state == RF231_STATE_IDLE){
 	  process_post(&rf231_slotted_process, HANDLE_PACKET_EVENT, NULL);
 	} else if(state == RF231_STATE_SEND){
 	  process_post(&rf231_slotted_process, FRAME_SEND_EVENT, NULL);
 	}
-#endif /* SLOTTED_KOORDINATOR */
       }
     }
   else if (TIMx->SR & TIM_OC_IRQ_FLAG)
@@ -536,6 +534,10 @@ void hal_update_oc(uint32_t oc_value)
   TIMx->CCR_OC=TIMx->CCR_OC + oc_value;
 }
 
+uint32_t hal_get_oc()
+{
+  return TIMx->CCR_OC;
+}
 /*--------------------------------------------------------------------------*/
 /**
  * Initialise the hardware
@@ -589,7 +591,7 @@ hal_init(void)
   tmpccer |=  (CCER_OC_CCE | CCER_OC_CCP);
   TIMx->CCER = tmpccer;
 
-  /* Setup TX_MODE_Time -  load register, clear all bits regarding our
+  /* Setup TX_MODE_Timer -  load register, clear all bits regarding our
    * OC channel, set predefined values and write back
    */
   tmpccmrx = TIMx->CCMR_TX_MODE;
