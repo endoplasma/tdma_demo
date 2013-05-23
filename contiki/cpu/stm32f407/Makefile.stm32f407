@@ -135,7 +135,8 @@ OBJOPTS = -O binary
 
 FLASHER = openocd
 FLASHER_OPTS = -f board/stm32f4discovery.cfg
-FLASHER_DIR = /home/spliphi/bin/openocd/share/openocd/scripts
+#FLASHER_DIR = /home/spliphi/bin/openocd/share/openocd/scripts
+FLASHER_DIR = /home/stm32-devel/sat/share/openocd/scripts
 
 ### Custom rules
 

@@ -847,7 +847,11 @@ rf231_off(void)
 int
 rf231_on(void)
 {
+#ifdef SLOTTED_KOORDINATOR
+  state = RF231_STATE_SEND;
+#else
   state = RF231_STATE_IDLE;
+#endif
   /** start the timer */
   /** bring transceiver into RX_ON */
   return 1;
@@ -899,17 +903,18 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
     if(ev==HANDLE_PACKET_EVENT){
       hal_frame_read(rxframe);
       if(rxframe[0].data[0] == 0xa0) {
-	hal_set_oc(lastBeaconTime + rf231_slotted_config.slotOffsett - HARDWARE_DELAY_TICKS);
-	state = RF231_STATE_SEND;
-	rf231_set_trx_state(PLL_ON);
-	rf231_upload_packet(16);
-	hal_set_TX_Mode_Timer(lastBeaconTime + TDMA_PERIOD_TICKS - KOORD_PROCESSING_TIME_TICKS);
+        hal_set_oc(lastBeaconTime + rf231_slotted_config.slotOffsett - HARDWARE_DELAY_TICKS);
+	    state = RF231_STATE_SEND;
+	    rf231_set_trx_state(PLL_ON);
+	    rf231_upload_packet(16);
+	    hal_set_TX_Mode_Timer(lastBeaconTime + TDMA_PERIOD_TICKS - (2 * KOORD_PROCESSING_TIME_TICKS));
       }
     }
     if(ev==TX_MODE_TIMER_EVENT){
 #ifdef SLOTTED_KOORDINATOR
       state = RF231_STATE_SEND;
       rf231_set_trx_state(PLL_ON);
+      rf231_upload_packet(24);
 #else /* SLOTTED_KOORDINATOR */
       state = RF231_STATE_IDLE;
       rf231_set_trx_state(RX_AACK_ON);
