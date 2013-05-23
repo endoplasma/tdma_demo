@@ -709,8 +709,8 @@ hal_init(void)
    ******************************************************************************/
   RCC->SPI_APBxRSTR |= RCC_APBxRSTR_SPIxRST;        /** Enable SPI reset state */
   RCC->SPI_APBxRSTR &= ~RCC_APBxRSTR_SPIxRST;       /** Release SPI from reset state */
-  /* set MSB first, CPOL=CPHA=0, Baud=fPCLK/16, Master */
-  SPIx->CR1 = (uint16_t)(SPI_CR1_SSM | SPI_CR1_SSI | SPI_CR1_BR_2 | SPI_CR1_MSTR); 
+  /* set MSB first, CPOL=CPHA=0, Baud=fPCLK/16 ~= 5.3 MHz, Master */
+  SPIx->CR1 = (uint16_t)(SPI_CR1_SSM | SPI_CR1_SSI | (SPI_CR1_BR_1 | SPI_CR1_BR_0) | SPI_CR1_MSTR); 
   /* Activate the SPI mode (Reset I2SMOD bit in I2SCFGR register) */
   SPIx->I2SCFGR &= (uint16_t)~SPI_I2SCFGR_I2SMOD;
 
