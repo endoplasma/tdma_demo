@@ -14,6 +14,7 @@
 #include <clock.h>
 #include "rf231_slotted_registermap.h"
 #include "rf231_slotted.h"
+#include "ioboard.h"
 
 
 

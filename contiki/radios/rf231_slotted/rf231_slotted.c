@@ -54,6 +54,8 @@ extern uint32_t slotTime;
 
 static proto_conf_t rf231_slotted_config;
 
+static volatile counter;
+
 uint8_t sqn;
 
 uint8_t  volatile state = RF231_STATE_UNINIT;
@@ -904,17 +906,41 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
       hal_frame_read(rxframe);
       if(rxframe[0].data[0] == 0xa0) {
         hal_set_oc(lastBeaconTime + rf231_slotted_config.slotOffsett - HARDWARE_DELAY_TICKS);
-	    state = RF231_STATE_SEND;
-	    rf231_set_trx_state(PLL_ON);
-	    rf231_upload_packet(16);
-	    hal_set_TX_Mode_Timer(lastBeaconTime + TDMA_PERIOD_TICKS - (2 * KOORD_PROCESSING_TIME_TICKS));
+	ioboard_leds_set(rxframe[0].data[10]);
+	state = RF231_STATE_SEND;
+	rf231_set_trx_state(PLL_ON);
+	rf231_upload_packet(16);
+	hal_set_TX_Mode_Timer(lastBeaconTime + TDMA_PERIOD_TICKS - (2 * KOORD_PROCESSING_TIME_TICKS));
+	if (counter == 500) {
+	  leds_on(LEDS_GREEN);
+	  //  ioboard_leds_set(0xff);
+	  ++counter;
+	} else if (counter >= 1000) {
+	  leds_off(LEDS_GREEN);
+	  //ioboard_leds_set(0);
+	      counter = 0;
+	} else {
+	  ++counter;
+	}
       }
     }
     if(ev==TX_MODE_TIMER_EVENT){
 #ifdef SLOTTED_KOORDINATOR
       state = RF231_STATE_SEND;
+      buffer[10] = ioboard_buttons_get();
       rf231_set_trx_state(PLL_ON);
       rf231_upload_packet(24);
+      if (counter == 500) {
+	leds_on(LEDS_GREEN);
+	ioboard_leds_set(0xff);
+	++counter;
+      } else if (counter >= 1000) {
+	leds_off(LEDS_GREEN);
+	ioboard_leds_set(0x0);
+	counter = 0;
+      } else {
+	++counter;
+      }
 #else /* SLOTTED_KOORDINATOR */
       state = RF231_STATE_IDLE;
       rf231_set_trx_state(RX_AACK_ON);

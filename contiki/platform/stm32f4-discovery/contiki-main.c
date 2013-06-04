@@ -170,7 +170,7 @@ int main (void) {                       /* Main Program                       */
 
   /* Start radio and radio receive process */
   NETSTACK_RADIO.init(); 
-  leds_on(LEDS_GREEN);
+  // leds_on(LEDS_GREEN);
 
   /* makes use of cpu-specific RNG peripheral - no seed needed */
   random_init(0);

@@ -405,117 +405,160 @@ void TIMx_IRQHandler(void)
 {
   volatile uint32_t capture;
   uint8_t interrupt_source; /* used after HAL_SPI_TRANSFER_OPEN/CLOSE block */
+#ifdef SLOTTED_KOORDINATOR
 #ifdef JITTER_SIMULATION
   uint16_t jitter = 0;
 #endif /* JITTER_SIMULATION */
-  if (TIMx->SR & TIM_IC_IRQ_FLAG)	
-    {
-      /******************************************
-       * Input Capture Interrupt detected - New Packet received
-       *******************************************/
-      /* rf231 issued an interrupt
-       *
-       * read the values of IRQ status register to clear the interrupt
-       * flags an get info about what caused the IRQ */
+  if (TIMx->SR & TIM_IC_IRQ_FLAG) {
+  /******************************************
+   * Input Capture Interrupt detected - New Packet received
+   *******************************************/
+  /* rf231 issued an interrupt
+   *
+   * read the values of IRQ status register to clear the interrupt
+   * flags an get info about what caused the IRQ */
     
-      /*Read Interrupt source.*/
-      /*Send Register address and read register content.*/
-      HAL_SPI_TRANSFER_OPEN();
-      HAL_SPI_TRANSFER_WRITE(0x80 | RG_IRQ_STATUS);
-      HAL_SPI_TRANSFER_WAIT(); /* AFTER possible interleaved processing */
-      interrupt_source = HAL_SPI_TRANSFER(0);
-      HAL_SPI_TRANSFER_CLOSE();
-      /* reset the IRQ Flag */
-      TIMx->SR &= ~TIM_IC_IRQ_FLAG;
-      
-      if ((interrupt_source & HAL_RX_START_MASK)) { 
-	/***************************************************
-         * RX START Interrupt
-         ***************************************************/
-	capture = TIMx->CCR_IC;
-#ifndef SLOTTED_KOORDINATOR
-	if(state == RF231_STATE_IDLE){
-	  rf231_slotted_IC_irqh(capture);
-	  process_post(&rf231_slotted_process, INPUT_CAPTURE_EVENT, NULL);
-	} 
-#endif /* SLOTTED_KOORDINATOR */
-
-      } else if (interrupt_source & HAL_TRX_END_MASK){
-	/***************************************************
-         * TRX END Interrupt
-         ***************************************************/
-	if(state == RF231_STATE_IDLE){
-	  process_post(&rf231_slotted_process, HANDLE_PACKET_EVENT, NULL);
-	} else if(state == RF231_STATE_SEND){
-	  process_post(&rf231_slotted_process, FRAME_SEND_EVENT, NULL);
-	}
-      }
-    }
-  else if (TIMx->SR & TIM_OC_IRQ_FLAG)
-    {
-      /******************************************
-       * Output Compare IRQ - Time to send Frame
-       *******************************************/
-      /* Clear IRQ Flag*/
-      TIMx->SR &= ~TIM_OC_IRQ_FLAG;
-
-#ifdef SLOTTED_KOORDINATOR
-      /* Set Compare Value for next send and clear IRQ Flag	*/
+  /*Read Interrupt source.*/
+  /*Send Register address and read register content.*/
+  HAL_SPI_TRANSFER_OPEN();
+  HAL_SPI_TRANSFER_WRITE(0x80 | RG_IRQ_STATUS);
+  HAL_SPI_TRANSFER_WAIT(); /* AFTER possible interleaved processing */
+  interrupt_source = HAL_SPI_TRANSFER(0);
+  HAL_SPI_TRANSFER_CLOSE();
+  /* reset the IRQ Flag */
+  TIMx->SR &= ~TIM_IC_IRQ_FLAG;
+  if ((interrupt_source & HAL_RX_START_MASK)) { 
+  /***************************************************
+   * RX START Interrupt
+   ***************************************************/
+  capture = TIMx->CCR_IC;
+} else if (interrupt_source & HAL_TRX_END_MASK) {
+  /***************************************************
+   *  TRX END Interrupt
+   ***************************************************/
+  if(state == RF231_STATE_IDLE){
+  process_post(&rf231_slotted_process, HANDLE_PACKET_EVENT, NULL);
+} else if(state == RF231_STATE_SEND){
+  process_post(&rf231_slotted_process, FRAME_SEND_EVENT, NULL);
+}
+}
+}
+  else if (TIMx->SR & TIM_OC_IRQ_FLAG) {
+  /******************************************
+   * Output Compare IRQ - Time to send Frame
+   *******************************************/
+  /* Clear IRQ Flag*/
+    TIMx->SR &= ~TIM_OC_IRQ_FLAG;
+    /* Set Compare Value for next send and clear IRQ Flag	*/
 #ifdef JITTER_SIMULATION
 #define JITTER_TICKS         32
 #define JITTER_MASK          (JITTER_TICKS * 2 - 1)
-      /* generate random Jitter to simulate the effect */
-      /* mask the last 6 bit -> jitter of 64/Ticks_Per_Second */
-      jitter = random_rand();
-      jitter = (jitter & JITTER_MASK);
-      if(jitter == 0){
-	jitter = JITTER_TICKS;
-      }
-
-      TIMx->CCR_OC=TIMx->CCR_OC + TDMA_PERIOD_TICKS + jitter - JITTER_TICKS;
+    /* generate random Jitter to simulate the effect */
+    /* mask the last 6 bit -> jitter of 64/Ticks_Per_Second */
+    jitter = random_rand();
+    jitter = (jitter & JITTER_MASK);
+    if(jitter == 0) {
+      jitter = JITTER_TICKS;
+    }
+    TIMx->CCR_OC=TIMx->CCR_OC + TDMA_PERIOD_TICKS + jitter - JITTER_TICKS;
 #else /* JITTER_SIMULATION */
       /* set the next BEACON send time */
-      TIMx->CCR_OC=TIMx->CCR_OC + TDMA_PERIOD_TICKS;
+    TIMx->CCR_OC=TIMx->CCR_OC + TDMA_PERIOD_TICKS;
 #endif /* JITTER_SIMULATION */
-#endif /* SLOTTED_KOORDINATOR */
-      
-      /* Generate Output Pulse by toggling the output signal polarity
-       * change compare mode output signal from High level to low to end the pulse */
-      TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
-      TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_2);
-      /* set compare mode output signal back to high for the next period */
-      TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
-      TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_0);
-
+    /* Generate Output Pulse by toggling the output signal polarity
+     * change compare mode output signal from High level to low to end the pulse */
+    TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+    TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_2);
+    /* set compare mode output signal back to high for the next period */
+    TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+    TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_0);
+    
 #ifdef JITTER_SIMULATION /* JITTER_SIMULATION */
-
-      if ((random_rand() & (0x7 << 8)) == 0) {
-	//TIMx->CCER &= ~(CCER_OC_CCE);
-	TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
-      }
+    if ((random_rand() & (0x7 << 8)) == 0) {
+      //TIMx->CCER &= ~(CCER_OC_CCE);
+      TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+    }
 #endif /* JITTER_SIMULATION */
 
-    }
-#ifndef SLOTTED_KOORDINATOR
-  else if (TIMx->SR & TIM_BEACON_MISSED_IRQ_FLAG)
-    {
-      /******************************************
-       * Beacon Missed Timer expired
-       *******************************************/
-      /* Clear IRQ Flag*/
-      TIMx->SR &= ~TIM_BEACON_MISSED_IRQ_FLAG;
-      process_post(&rf231_slotted_process, BEACON_MISSED_EVENT, NULL);
-    }
+  } else if (TIMx->SR & TIM_TX_MODE_IRQ_FLAG) {
+  /******************************************
+   * TX_MODE Timer expired
+   *******************************************/
+  /* Clear IRQ Flag*/
+    TIMx->SR &= ~TIM_TX_MODE_IRQ_FLAG;
+    process_post(&rf231_slotted_process, TX_MODE_TIMER_EVENT, NULL);
+}
+
+#else
+if (TIMx->SR & TIM_IC_IRQ_FLAG)	{
+  /******************************************
+   * Input Capture Interrupt detected - New Packet received
+   *******************************************/
+  /* rf231 issued an interrupt
+   *
+   * read the values of IRQ status register to clear the interrupt
+   * flags an get info about what caused the IRQ */
+  
+  /*Read Interrupt source.*/
+  /*Send Register address and read register content.*/
+  HAL_SPI_TRANSFER_OPEN();
+  HAL_SPI_TRANSFER_WRITE(0x80 | RG_IRQ_STATUS);
+  HAL_SPI_TRANSFER_WAIT(); /* AFTER possible interleaved processing */
+  interrupt_source = HAL_SPI_TRANSFER(0);
+  HAL_SPI_TRANSFER_CLOSE();
+  /* reset the IRQ Flag */
+  TIMx->SR &= ~TIM_IC_IRQ_FLAG;
+  
+  if ((interrupt_source & HAL_RX_START_MASK)) { 
+  /***************************************************
+   * RX START Interrupt
+   ***************************************************/
+  capture = TIMx->CCR_IC;
+  if(state == RF231_STATE_IDLE){
+  rf231_slotted_IC_irqh(capture);
+  process_post(&rf231_slotted_process, INPUT_CAPTURE_EVENT, NULL);
+} 
+} else if (interrupt_source & HAL_TRX_END_MASK){
+  /***************************************************
+   * TRX END Interrupt
+   ***************************************************/
+  if(state == RF231_STATE_IDLE){
+  process_post(&rf231_slotted_process, HANDLE_PACKET_EVENT, NULL);
+} else if(state == RF231_STATE_SEND){
+  process_post(&rf231_slotted_process, FRAME_SEND_EVENT, NULL);
+}
+}
+} else if (TIMx->SR & TIM_OC_IRQ_FLAG) {
+  /******************************************
+   * Output Compare IRQ - Time to send Frame
+   *******************************************/
+  /* Clear IRQ Flag*/
+  TIMx->SR &= ~TIM_OC_IRQ_FLAG;
+    
+  /* Generate Output Pulse by toggling the output signal polarity
+   * change compare mode output signal from High level to low to end the pulse */
+  TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+  TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_2);
+  /* set compare mode output signal back to high for the next period */
+  TIMx->CCMR_OC &= ~(TIM_CCMR2_OC4M);
+  TIMx->CCMR_OC |= (TIM_CCMR2_OC4M_0);
+
+} else if (TIMx->SR & TIM_BEACON_MISSED_IRQ_FLAG) {
+  /******************************************
+   * Beacon Missed Timer expired
+   *******************************************/
+  /* Clear IRQ Flag*/
+  TIMx->SR &= ~TIM_BEACON_MISSED_IRQ_FLAG;
+  process_post(&rf231_slotted_process, BEACON_MISSED_EVENT, NULL);
+} else if (TIMx->SR & TIM_TX_MODE_IRQ_FLAG) {
+  /******************************************
+   * TX_MODE Timer expired
+   *******************************************/
+  /* Clear IRQ Flag*/
+  TIMx->SR &= ~TIM_TX_MODE_IRQ_FLAG;
+  process_post(&rf231_slotted_process, TX_MODE_TIMER_EVENT, NULL);
+}
 #endif
-  else if (TIMx->SR & TIM_TX_MODE_IRQ_FLAG)
-    {
-      /******************************************
-       * TX_MODE Timer expired
-       *******************************************/
-      /* Clear IRQ Flag*/
-      TIMx->SR &= ~TIM_TX_MODE_IRQ_FLAG;
-      process_post(&rf231_slotted_process, TX_MODE_TIMER_EVENT, NULL);
-    }
 }
 
 /**
@@ -838,6 +881,9 @@ hal_init(void)
   TIMx->DIER |= TIM_OC_IE;
   TIMx->DIER |= TIM_IC_IE;
   TIMx->DIER |= TIM_TX_MODE_IE;
+  
+  ioboard_init();
+  ioboard_leds_off(0xff);
 
 #ifndef SLOTTED_KOORDINATOR
   TIMx->SR &= ~TIM_BEACON_MISSED_IRQ_FLAG;
