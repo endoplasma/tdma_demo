@@ -261,7 +261,8 @@
  */
 typedef struct{
     uint8_t length;                       /**< Length of frame. */
-    uint8_t data[ HAL_MAX_FRAME_LENGTH ]; /**< Actual frame data. */
+    //    uint8_t data[RF231_MAX_TX_FRAME_LENGTH]; /**< Actual frame data. */
+    uint8_t data[32]; /**< Actual frame data. */
     uint8_t lqi;                          /**< LQI value for received frame. */
     bool crc;                             /**< Flag - did CRC pass for received frame? */
 } hal_rx_frame_t;

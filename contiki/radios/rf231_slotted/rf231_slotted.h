@@ -1,3 +1,41 @@
+/*
+ * Copyright (c) 2012, TU Dortmund University.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following
+ *    disclaimer in the documentation and/or other materials provided
+ *    with the distribution.
+ * 3. The name of the author may not be used to endorse or promote
+ *    products derived from this software without specific prior
+ *    written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
+ * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * This file is part of the Contiki OS
+ *
+ */
+/*---------------------------------------------------------------------------*/
+/**
+ * \file    Headerfle for the rf231 specific slotted phy driver
+ * \author  Philipp Spliethoff <philipp.spliethoff@tu-dortmund.de>
+ */
+/*---------------------------------------------------------------------------*/
 #ifndef RF231_SLOTTED_H
 #define RF231_SLOTTED_H
 
@@ -51,6 +89,7 @@ extern const struct radio_driver rf231_slotted_driver;
 #define FRAME_SEND_EVENT              25
 
 /*============================ TDMA PARAMETER ================================*/
+/* change those parameters to modifiy the TDMA Protokoll flow */
 #define MAX_CLIENTS                   3
 #define PAYLOAD_PER_CLIENT            4
 #define MAX_RESPONSE_PAYLOAD          4
@@ -66,9 +105,9 @@ extern const struct radio_driver rf231_slotted_driver;
 
             
 #ifdef SLOTTED_KOORDINATOR
-#define RF230_MAX_TX_FRAME_LENGTH     (BEACON_HEADER_LENGTH + (MAX_CLIENTS * PAYLOAD_PER_CLIENT) + 2)
+#define RF231_MAX_TX_FRAME_LENGTH     (BEACON_HEADER_LENGTH + (MAX_CLIENTS * PAYLOAD_PER_CLIENT) + 2)
 #else 
-#define RF230_MAX_TX_FRAME_LENGTH     (RESPONSE_HEADER_LENGTH + MAX_RESPONSE_PAYLOAD + 2)
+#define RF231_MAX_TX_FRAME_LENGTH     (RESPONSE_HEADER_LENGTH + MAX_RESPONSE_PAYLOAD + 2)
 #endif /* SLOTTED_KOORDINATOR */
 
 
@@ -126,11 +165,13 @@ typedef enum{
 						  received. */
 }radio_status_t;
 
+
 /**
- * A Struct that stores all Inforation used to configure the behaviour
+ * A structure to stores all information used to configure the state
  * of the TDMA Protocol.
+ *
  */
-typedef struct{
+ typedef struct{
   uint32_t numClients;             /**< the nuber max number of connected
 				        clients */
   uint32_t Period;                 /**< The actual calulated Period */
@@ -145,8 +186,9 @@ typedef struct{
 }proto_conf_t;
 
 /**
- * A struct to store information about the state and defines some basic global
- * variables
+ * A struct to store the last measuered period lengths to calculate
+ * the correct send time
+ *
  */
 typedef struct ringBuffer{
   uint32_t Buff[NUM_PERIODS];      /**< Array to store the last measured

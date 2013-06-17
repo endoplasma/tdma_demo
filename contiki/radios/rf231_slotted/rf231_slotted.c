@@ -1,3 +1,45 @@
+/*
+ * Copyright (c) 2012, TU Dortmund University.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following
+ *    disclaimer in the documentation and/or other materials provided
+ *    with the distribution.
+ * 3. The name of the author may not be used to endorse or promote
+ *    products derived from this software without specific prior
+ *    written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
+ * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * This file is part of the Contiki OS
+ *
+ */
+/*---------------------------------------------------------------------------*/
+/**
+ * \file This file implements the higher layer of the rf231 slotted
+ *       physical driver. 
+ *
+ * \author Philipp Spliethoff <philipp.spliethoff@tu-dortmund.de>
+ */
+/*---------------------------------------------------------------------------*/
+
+
 #include <stdio.h>
 #include <string.h>
 #include "contiki.h"
@@ -34,29 +76,27 @@
  *****************************************************************************/
 PROCESS(rf231_slotted_process, "Slotted TDMA Driver");
 
-static uint8_t buffer[RF230_MAX_TX_FRAME_LENGTH];   /**< frame buffer */
-
 #ifdef SLOTTED_KOORDINATOR
-static uint8_t txBuffer[BEACON_PAYLOAD_LENGTH]; /**< Koordinator dummy Paket */
+static uint8_t txBuffer[BEACON_LENGTH]; /**< Koordinator dummy Paket */
 #else
-static uint8_t txBuffer[RESPONSE_PAYLOAD_LENGTH]; /**< Client dummy Paket */
+static uint8_t txBuffer[RESPONSE_LENGTH]; /**< Client dummy Paket */
 #endif
 
 /* Received frames are buffered to rxframe in the interrupt routine in
    hal.c */
 uint8_t rxframe_head,rxframe_tail;
-hal_rx_frame_t rxframe[RF230_CONF_RX_BUFFERS];
+hal_rx_frame_t rxframe[MAX_CLIENTS];
 
-static ring_buffer_t PeriodBuffer;      /**< A ring buffer to store the
-					     last measured periods */
-uint32_t lastBeaconTime;
-extern uint32_t slotTime;
-
-static proto_conf_t rf231_slotted_config;
-
-static volatile counter;
-
-uint8_t sqn;
+static ring_buffer_t PeriodBuffer;          /**< A ring buffer to store the last
+					         measured periods */
+uint32_t lastBeaconTime;                    /**< time of the last beacon */
+extern uint32_t slotTime;                   /**< Offsett of the timeslot of this
+					         client */
+static proto_conf_t rf231_slotted_config;   /**< contorl struct for the mac
+			   		         driver */
+static volatile counter; 
+uint8_t sqn;                                /**< Sequence Number - only needed if
+				                 the framer isn't used */
 
 uint8_t  volatile state = RF231_STATE_UNINIT;
 
@@ -81,16 +121,17 @@ typedef enum{
 /******************************************************************************
  * Prototypes
  ******************************************************************************/
-int rf231_init(void);
-int rf231_on(void);
-int rf231_off(void);
-static void rf231_warm_reset(void);
-static void rf231_reset_state_machine(void);
-static void rf231_wait_idle(void);
-static bool rf231_is_ready_to_sendy(void);
-uint8_t rf231_get_trx_state(void);
-radio_status_t rf231_set_trx_state(uint8_t new_state);
-void rf231_upload_packet(unsigned short payload_len);
+ int rf231_init(void);
+ int rf231_on(void);
+ int rf231_off(void);
+ void rf231_warm_reset(void);
+ void rf231_reset_state_machine(void);
+ void rf231_wait_idle(void);
+ bool rf231_is_ready_to_sendy(void);
+ uint8_t rf231_get_trx_state(void);
+ radio_status_t rf231_set_trx_state(uint8_t new_state);
+ void rf231_upload_packet(unsigned short payload_len);
+int create_packet(void);
 
 static int rf231_read(void *buf, unsigned short bufsize);
 static int rf231_prepare(const void *data, unsigned short len);
@@ -100,8 +141,6 @@ static int rf231_receiving_packet(void);
 static int rf231_pending_packet(void);
 static int rf231_cca(void);
 
-static int create_packet(void);
- 
  const struct radio_driver rf231_slotted_driver =
   {
     rf231_init,
@@ -119,7 +158,15 @@ static int create_packet(void);
 /*****************************************************************************
  * Radio Driver API Function definition
  *****************************************************************************/
-/*---------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/**
+ * \brief on - activate the rf213 hardware This Function activates and resets
+ * the at86rf231 hardware and initialises the phy driver
+ *
+ * \param 
+ * \return void
+ * 
+ */
  static void
  on(void)
 {
@@ -128,21 +175,21 @@ static int create_packet(void);
   RF230BB_HOOK_RADIO_ON();
 #endif
 
-/* If radio is off (slptr high), turn it on */
+  /* If radio is off (slptr high), turn it on */
   if (hal_get_slptr()) {
     ENERGEST_ON(ENERGEST_TYPE_LED_RED);
 
-/* SPI based radios. The wake time depends on board capacitance.  Make
- * sure the delay is long enough, as using SPI too soon will reset the
- * MCU!  Use 2x the nominal value for safety. 1.5x is not long enough
- * for Raven!
- */
+    /* SPI based radios. The wake time depends on board capacitance.  Make
+     * sure the delay is long enough, as using SPI too soon will reset the
+     * MCU!  Use 2x the nominal value for safety. 1.5x is not long enough
+     * for Raven!
+     */
     hal_set_slptr_low();
     delay_us(2*TIME_SLEEP_TO_TRX_OFF);
   }
 
   /* if tdma koord: go directly to send mode after activation 
-  * otherwise start listening */
+   * otherwise start listening */
 #ifdef SLOTTED_KOORDINATOR
   rf231_set_trx_state(PLL_ON);
   state = RF231_STATE_SEND;
@@ -213,7 +260,7 @@ rf231_init(void)
   uint8_t i;
   uint8_t tvers, tmanu;
   uint8_t address_0;
-
+  /* Initialise the Config Structure */
   PeriodBuffer.PutPos = 0;
   PeriodBuffer.Count = 0;
   rf231_slotted_config.clientProcessing = 0;
@@ -243,55 +290,57 @@ rf231_init(void)
 
 /* set the dummy Payload with 0 bits */
 #ifdef SLOTTED_KOORDINATOR
-  memset(&txBuffer, 0, sizeof(uint8_t) * BEACON_PAYLOAD_LENGTH);
+  memset(&txBuffer, 0, sizeof(uint8_t) * BEACON_LENGTH);
 #else
-  memset(&txBuffer, 0, sizeof(uint8_t) * RESPONSE_PAYLOAD_LENGTH);
+  memset(&txBuffer, 0, sizeof(uint8_t) * RESPONSE_LENGTH);
 #endif
 
 
   /* create a dummy packet */
+  /* hardopded dummy packet. Its better to use the framer! see packet_create
+     function below */
 #ifdef SLOTTED_KOORDINATOR
-  buffer[0]=0xa0;            /* fcf*/
-  buffer[1]=0x06;
-  buffer[2]=0x00;            /* sqn */
-  buffer[3]=TDMA_PAN_ID_1;   /* src PAN ID */
-  buffer[4]=TDMA_PAN_ID_0;
-  buffer[5]=(*((uint8_t*)0x1FFF7A10+2));       /* src address */
-  buffer[6]=(*((uint8_t*)0x1FFF7A10+0));
-  buffer[7]=0x03;                              /* cycle time */
-  buffer[8]=0xe8;
-  buffer[9]=0x03;                              /* clients */
-  buffer[10]=0x11;          /* Payload start */
-  buffer[11]=0x11;
-  buffer[12]=0x11;
-  buffer[13]=0x11;
-  buffer[14]=0x22;         /* PL 2*/
-  buffer[15]=0x22;
-  buffer[16]=0x22;
-  buffer[17]=0x22;
-  buffer[18]=0x33;        /* pl 3 */
-  buffer[19]=0x33;
-  buffer[20]=0x33;
-  buffer[21]=0x33;
-  buffer[22]=0x00;        /* FCS */
-  buffer[23]=0x00;
+  txBuffer[0]=0xa0;            /* fcf*/
+  txBuffer[1]=0x06;
+  txBuffer[2]=0x00;            /* sqn */
+  txBuffer[3]=TDMA_PAN_ID_1;   /* src PAN ID */
+  txBuffer[4]=TDMA_PAN_ID_0;
+  txBuffer[5]=(*((uint8_t*)0x1FFF7A10+2));       /* src address */
+  txBuffer[6]=(*((uint8_t*)0x1FFF7A10+0));
+  txBuffer[7]=0x03;                              /* cycle time */
+  txBuffer[8]=0xe8;
+  txBuffer[9]=0x03;                              /* clients */
+  txBuffer[10]=0x11;          /* Payload start */
+  txBuffer[11]=0x11;
+  txBuffer[12]=0x11;
+  txBuffer[13]=0x11;
+  txBuffer[14]=0x22;         /* PL 2*/
+  txBuffer[15]=0x22;
+  txBuffer[16]=0x22;
+  txBuffer[17]=0x22;
+  txBuffer[18]=0x33;        /* pl 3 */
+  txBuffer[19]=0x33;
+  txBuffer[20]=0x33;
+  txBuffer[21]=0x33;
+  txBuffer[22]=0x00;        /* FCS */
+  txBuffer[23]=0x00;
 #else
-  buffer[0]=0xa2;            /* fcf*/
-  buffer[1]=0x26;
-  buffer[2]=0x00;            /* sqn */
-  buffer[3]=TDMA_PAN_ID_1;   /* dst PAN ID */
-  buffer[4]=TDMA_PAN_ID_0;
-  buffer[5]=0x2e;            /* dst address of koord */
-  buffer[6]=0x1b;
-  buffer[7]=(*((uint8_t*)0x1FFF7A10+2));       /* dst address */
-  buffer[8]=(*((uint8_t*)0x1FFF7A10+0));
-  buffer[9]=0x04;                              /* payload length */
-  buffer[10]=0x00;          /* Payload start */
-  buffer[11]=0x22;
-  buffer[12]=0x33;
-  buffer[13]=0x44;
-  buffer[14]=0x00;         /* PL 2*/
-  buffer[15]=0x00;
+  txBuffer[0]=0xa2;            /* fcf*/
+  txBuffer[1]=0x26;
+  txBuffer[2]=0x00;            /* sqn */
+  txBuffer[3]=TDMA_PAN_ID_1;   /* dst PAN ID */
+  txBuffer[4]=TDMA_PAN_ID_0;
+  txBuffer[5]=0x2e;            /* dst address of koord */
+  txBuffer[6]=0x1b;
+  txBuffer[7]=(*((uint8_t*)0x1FFF7A10+2));       /* dst address */
+  txBuffer[8]=(*((uint8_t*)0x1FFF7A10+0));
+  txBuffer[9]=0x04;                              /* payload length */
+  txBuffer[10]=0x00;          /* Payload start */
+  txBuffer[11]=0x22;
+  txBuffer[12]=0x33;
+  txBuffer[13]=0x44;
+  txBuffer[14]=0x00;         /* PL 2*/
+  txBuffer[15]=0x00;
 #endif
 
   /* Wait in case VCC just applied */
@@ -299,7 +348,7 @@ rf231_init(void)
   /* Initialize Hardware Abstraction Layer */
   hal_init();
 
-  /* Set receive buffers empty and point to the first */
+  /* Set receive txBuffers empty and point to the first */
   for (i=0;i<RF230_CONF_RX_BUFFERS;i++) rxframe[i].length=0;
   rxframe_head=0;rxframe_tail=0;
   
@@ -339,14 +388,16 @@ rf231_init(void)
   process_start(&rf231_slotted_process, NULL);
 
   on();
-
+  
+  /* bring the radio to send or receive state and upload a packet and reset the
+     timer module */
 #ifdef SLOTTED_KOORDINATOR
   rf231_set_trx_state(PLL_ON);
   rf231_upload_packet(24);
 #else
   rf231_set_trx_state(RX_AACK_ON);
 #endif
-
+  /* Enabel interrupts */
   hal_register_write(RG_IRQ_MASK, RF230_SUPPORTED_INTERRUPT_MASK);
 
 #ifdef SLOTTED_KOORDINATOR
@@ -357,8 +408,16 @@ rf231_init(void)
   return 1;
 }
 
-/*---------------------------------------------------------------------------*/
-/* Used to reinitialize radio parameters without losing pan and mac address, channel, power, etc. */
+
+/*----------------------------------------------------------------------------*/
+/**
+ * \brief  rf231_warm_reset - do a soft reset of the rf231 hardware
+ * \param    
+ * \return void 
+ * 
+ * Used to reinitialize radio parameters without losing pan and mac address,
+ * channel, power, etc.
+ */
 void
 rf231_warm_reset(void) {
 
@@ -749,7 +808,7 @@ ringbuffer_add(ring_buffer_t *buffer, uint32_t value)
 void
 rf231_upload_packet(unsigned short payload_len)
 {
-    hal_frame_write(buffer, payload_len);
+    hal_frame_write(txBuffer, payload_len);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -789,7 +848,7 @@ static int
 rf231_transmit(unsigned short payload_len)
 {
 
-  /* leav as empty function.  transmission is timed by the slotted process */
+  /* leave as empty function. transmission is timed by the slotted process */
 
 
   return 1; 
@@ -842,6 +901,7 @@ rf231_pending_packet(void)
 int
 rf231_off(void)
 {
+  off();
   return 1;
 }
 
@@ -859,7 +919,17 @@ rf231_on(void)
   return 1;
 }
 
-void rf231_slotted_IC_irqh(uint32_t capture)
+/*----------------------------------------------------------------------------*/
+/**
+ * \brief  rf231_slotted_IC_irqh - Input Capture Interrupt routine
+ * \param  capture  timer value of the last capture
+ * \return void 
+ * 
+ * This Function is called when a Input capture interrupt occured and sets the
+ * time of the last receiver packet.
+ */
+void 
+rf231_slotted_IC_irqh(uint32_t capture)
 {
   /* write IC value into the IC buffer and generate a IC event to process the new value*/
   /* store the new value into our ringbuffer */
@@ -867,18 +937,39 @@ void rf231_slotted_IC_irqh(uint32_t capture)
   lastBeaconTime = capture;
 }
 
-static void calculate_period()
+/*----------------------------------------------------------------------------*/
+/**
+ * \brief  calculate_period - estimate the length of the last pariod
+ * \return void 
+ * 
+ * This function estimates the period length of the beacon frame arrivals
+ */
+ static void 
+calculate_period()
 {
   int i;
   uint32_t AvgPeriod;
 
-  /* substract last stored value with the first sotred and divide by number of periods */
-  rf231_slotted_config.Period = (PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1] 
-	    - PeriodBuffer.Buff[PeriodBuffer.PutPos])  >> NUM_PERIODS_BASE;
+  if (state == RF231_STATE_ACTIVE_PLL) {
+    /* substract last stored value with the first sotred and divide by number of periods */
+    rf231_slotted_config.Period = (PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1] 
+				   - PeriodBuffer.Buff[PeriodBuffer.PutPos])  >> NUM_PERIODS_BASE;
+  } else {
+    /* calculate using FIR filtering */
+    rf231_slotted_config.Period = (0.95 * rf231_slotted_config.Period) 
+      + (0.05 * (PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1]  - PeriodBuffer.Buff[PeriodBuffer.PutPos]));
 }
 
 /*---------------------------------------------------------------------------*/
-/* Process to handle input packets
+/*----------------------------------------------------------------------------*/
+/**
+ * \brief  PROCESS_THREAD - the tdma mac thread
+ * \param  
+ * \param  Events  
+ * \param  Data  
+ * \return int
+ * 
+ * Process to handle input packets
  * Receive interrupts cause this process to be polled
  * It calls the core MAC layer which calls rf231_read to get the packet
  * rf231processflag can be printed in the main idle loop for debugging
@@ -890,10 +981,8 @@ static void calculate_period()
  * TX_MODE_TIMER_EVENT
  * BEACON_RECEIVED_EVENT
  * FRAME_SEND_EVENT
- *
  */
-
-PROCESS_THREAD(rf231_slotted_process, ev, data)
+  PROCESS_THREAD(rf231_slotted_process, ev, data)
 {
   PROCESS_BEGIN();
 
@@ -902,23 +991,26 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
     if (ev == INPUT_CAPTURE_EVENT){
       // hal_set_oc(lastBeaconTime + rf231_slotted_config.slotOffsett + 1000);
     }
-    if(ev==HANDLE_PACKET_EVENT){
+    if(ev == HANDLE_PACKET_EVENT){
       hal_frame_read(rxframe);
       if(rxframe[0].data[0] == 0xa0) {
+	/* set the next send time */
         hal_set_oc(lastBeaconTime + rf231_slotted_config.slotOffsett - HARDWARE_DELAY_TICKS);
+	/* set the ioboard leds ti the received frame value */
 	ioboard_leds_set(rxframe[0].data[10]);
+	/* change the radio to send mode and upload the package */
 	state = RF231_STATE_SEND;
 	rf231_set_trx_state(PLL_ON);
 	rf231_upload_packet(16);
+	/* set the TX_MODE Timer to sqitch back to receive mode after the timer is expired */
 	hal_set_TX_Mode_Timer(lastBeaconTime + TDMA_PERIOD_TICKS - (2 * KOORD_PROCESSING_TIME_TICKS));
+	/* toggle the green LED to indicate correct state of the Protocoll */
 	if (counter == 500) {
 	  leds_on(LEDS_GREEN);
-	  //  ioboard_leds_set(0xff);
 	  ++counter;
 	} else if (counter >= 1000) {
 	  leds_off(LEDS_GREEN);
-	  //ioboard_leds_set(0);
-	      counter = 0;
+	  counter = 0;
 	} else {
 	  ++counter;
 	}
@@ -926,10 +1018,13 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
     }
     if(ev==TX_MODE_TIMER_EVENT){
 #ifdef SLOTTED_KOORDINATOR
+      /* TX Mode Timer expired and device is a koordinator. Bring radio to send mode and upload the next
+	 beacon including the button states */
       state = RF231_STATE_SEND;
-      buffer[10] = ioboard_buttons_get();
+      txBuffer[10] = ioboard_buttons_get();
       rf231_set_trx_state(PLL_ON);
       rf231_upload_packet(24);
+      /* toggle the green LED to indicate correct state of the Protocoll */
       if (counter == 500) {
 	leds_on(LEDS_GREEN);
 	ioboard_leds_set(0xff);
@@ -942,12 +1037,14 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
 	++counter;
       }
 #else /* SLOTTED_KOORDINATOR */
+      /* as client set bring the radio into receive mode */
       state = RF231_STATE_IDLE;
       rf231_set_trx_state(RX_AACK_ON);
 #endif /* SLOTTED_KOORDINATOR */
     }
     if(ev==FRAME_SEND_EVENT){
 #ifdef SLOTTED_KOORDINATOR
+      /* set radio to receive mode and set the time for the next send mode switch */
       state = RF231_STATE_IDLE;
       rf231_set_trx_state(RX_AACK_ON);
       hal_set_TX_Mode_Timer(hal_get_oc() - KOORD_PROCESSING_TIME_TICKS);
