@@ -101,7 +101,7 @@ hal_register_read(uint8_t address)
 }
   
 /*----------------------------------------------------------------------------*/
-/** \brief  This function writes a new value to one of the radio transceiver's
+/** \brief  This function writes a new value to one of the radio transceiver'SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0925", ATTR{idProduct}=="3881", MODE="0666"   SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="21a9", ATTR{idProduct}=="1001", MODE="0666"s
  *          registers.
  *
  *  \see Look at the at86rf230_registermap.h file for register address definitions.
@@ -318,73 +318,6 @@ hal_frame_write(uint8_t *write_buffer, uint8_t length)
  * Interrupt Service Routines
  *****************************************************************************/
 
-/* HAL_RF231_ISR() */
-/* { */
-/*   volatile uint8_t state; */
-/*   uint8_t interrupt_source; /\* used after HAL_SPI_TRANSFER_OPEN/CLOSE block *\/ */
-    
-/*   /\*Read Interrupt source.*\/ */
-/*   /\*Send Register address and read register content.*\/ */
-/*   HAL_SPI_TRANSFER_OPEN(); */
-/*   HAL_SPI_TRANSFER_WRITE(0x80 | RG_IRQ_STATUS); */
-/*   HAL_SPI_TRANSFER_WAIT(); /\* AFTER possible interleaved processing *\/ */
-/*   interrupt_source = HAL_SPI_TRANSFER(0); */
-/*   HAL_SPI_TRANSFER_CLOSE(); */
-
-/*   /\*Handle the incomming interrupt. Prioritized.*\/ */
-/*   if ((interrupt_source & HAL_RX_START_MASK)){ */
-/*     /\*********************** */
-/*      * RX_START IRQ */
-/*      **********************\/ */
-        
-/*   } else if (interrupt_source & HAL_TRX_END_MASK){ */
-/*     /\*********************** */
-/*      * TRX_END IRQ */
-/*      **********************\/ */
-/*     state = hal_subregister_read(SR_TRX_STATUS); */
-/*     if((state == BUSY_RX_AACK) || (state == RX_ON) || (state == BUSY_RX) || (state == RX_AACK_ON)) */
-/*       { */
-/* 	/\* TRX_END IRQ was caused by a received packet * Buffer the */
-/* 	 * frame and call rf230_interrupt to schedule poll for */
-/* 	 * rf230 receive process *\/ */
-
-/* 	hal_frame_read(&rxframe[rxframe_tail]); */
-/* 	rxframe_tail++;  */
-/* 	if (rxframe_tail >= RF230_CONF_RX_BUFFERS) */
-/* 	  { */
-/* 	    rxframe_tail=0; */
-/* 	  } */
-/* 	//	rf230_interrupt(); */
-	 
-/*       } */
-              
-/*   } else if (interrupt_source & HAL_TRX_UR_MASK){ */
-/*     /\*********************** */
-/*      * TRX_UR IRQ */
-/*      **********************\/ */
-/*   } else if (interrupt_source & HAL_PLL_UNLOCK_MASK){ */
-/*     /\*********************** */
-/*      * PLL_UNLOCK IRQ */
-/*      **********************\/ */
-/*   } else if (interrupt_source & HAL_PLL_LOCK_MASK){ */
-/*     /\*********************** */
-/*      * PLL_LOCK IRQ */
-/*      **********************\/ */
-/*   } else if (interrupt_source & HAL_BAT_LOW_MASK){ */
-/*     /\*  Disable BAT_LOW interrupt to prevent endless */
-/*      *  interrupts. The interrupt will continously be asserted */
-/*      *  while the supply voltage is less than the user-defined */
-/*      *  voltage threshold. *\/ */
-/*     /\*********************** */
-/*      * LOW_BAT IRQ */
-/*      **********************\/ */
-/*   } else { */
-/*     /\*********************** */
-/*      * UNDEFINED MASKED IRQ */
-/*      **********************\/ */
-/*   } */
-/* } */
-
 
 /**
  * Interrupthandler to stop the dma transfer
@@ -464,6 +397,7 @@ void TIMx_IRQHandler(void)
 #else /* JITTER_SIMULATION */
       /* set the next BEACON send time */
     TIMx->CCR_OC=TIMx->CCR_OC + TDMA_PERIOD_TICKS;
+    hal_set_TX_Mode_Timer(hal_get_oc() - KOORD_PROCESSING_TIME_TICKS);
 #endif /* JITTER_SIMULATION */
     /* Generate Output Pulse by toggling the output signal polarity
      * change compare mode output signal from High level to low to end the pulse */
@@ -610,6 +544,12 @@ hal_init(void)
 
   /* Setup Input Capture - load register, clear all bits regarding out
    * IC channel, set predefined values and write back
+   * This Input Capture Module is used to measure the arrival time of a package
+   * and for Interrupt generation.
+   *
+   * Timer module is used in IC mode and the channel, which is connected to the
+   * IRQ Pin of the AT86RF231
+   *
    */
   tmpccmrx = TIMx->CCMR_IC;
   tmpccmrx &= ~CCMR_IC_MASK;
@@ -623,6 +563,8 @@ hal_init(void)
   
   /* Setup Output Compare -  load register, clear all bits regarding our
    * OC channel, set predefined values and write back
+   *
+   * This IO
    */
   tmpccmrx = TIMx->CCMR_OC;
   tmpccmrx &= ~CCMR_OC_MASK;
@@ -651,6 +593,7 @@ hal_init(void)
 #ifndef SLOTTED_KOORDINATOR
   /* Setup BEACON_MISSED_Time -  load register, clear all bits regarding our
    * OC channel, set predefined values and write back
+   * TODO
    */
   tmpccmrx = TIMx->CCMR_BEACON_MISSED;
   tmpccmrx &= ~CCMR_BEACON_MISSED_MASK;
@@ -794,6 +737,28 @@ hal_init(void)
   /* blank out function selections on IRQ pin and then rewrite with TIMx_AF */
   SLPTRPORT->AFR[SLPTRPIN >> 0x03] &= ~((uint32_t)0xF << ((uint32_t)((uint32_t)SLPTRPIN & (uint32_t)0x07) * 4)) ;
   SLPTRPORT->AFR[SLPTRPIN >> 0x03] |= ((uint32_t)TIMx_AF << ((uint32_t)((uint32_t)SLPTRPIN & (uint32_t)0x07) * 4)) ;
+
+#if RF231_HAS_PA
+    RCC->AHB1ENR |= RCC_AHB1ENR_PAGPIOxEN; /* Enable PA GPIOx clock */
+
+    /*!< HGM pin configuration */
+    HGMPORT->MODER &= ~((uint32_t)0x3 << ((uint32_t)HGMPIN * 2));	/* unselect mode */
+    HGMPORT->MODER |= ((uint32_t)0x1 << ((uint32_t)HGMPIN * 2));	/* select output mode */
+    HGMPORT->OSPEEDR &= ~((uint32_t)0x3 << ((uint32_t)HGMPIN * 2)); /* reset speed */
+    HGMPORT->OSPEEDR |= ((uint32_t)0x2 << ((uint32_t)HGMPIN * 2)); /* set speed to 50 MHz */
+    HGMPORT->OTYPER &= ~((uint32_t)0x1 << (uint32_t)HGMPIN);	/* select push-pull */
+    HGMPORT->PUPDR &= ~((uint32_t)0x3 << ((uint32_t)HGMPIN * 2)); /* no pull-up/-down */
+    HGMPORT->ODR &= ~((uint32_t)0x1 << (uint32_t)HGMPIN);	/* set output low */
+
+    /*!< PAEN pin configuration */
+    PAENPORT->MODER &= ~((uint32_t)0x3 << ((uint32_t)PAENPIN * 2));	/* unselect mode */
+    PAENPORT->MODER |= ((uint32_t)0x1 << ((uint32_t)PAENPIN * 2));	/* select output mode */
+    PAENPORT->OSPEEDR &= ~((uint32_t)0x3 << ((uint32_t)PAENPIN * 2)); /* reset speed */
+    PAENPORT->OSPEEDR |= ((uint32_t)0x2 << ((uint32_t)PAENPIN * 2)); /* set speed to 50 MHz */
+    PAENPORT->OTYPER &= ~((uint32_t)0x1 << (uint32_t)PAENPIN);	/* select push-pull */
+    PAENPORT->PUPDR &= ~((uint32_t)0x3 << ((uint32_t)PAENPIN * 2)); /* no pull-up/-down */
+    PAENPORT->ODR |= ((uint32_t)0x1 << (uint32_t)PAENPIN);	/* set output high */
+#endif /* RF231_HAS_PA */
 
   /******************************************************************************
    * Initialise Random Number Generator to simulate the effect of

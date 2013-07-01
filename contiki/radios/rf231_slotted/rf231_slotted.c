@@ -42,6 +42,8 @@ static uint8_t txBuffer[BEACON_PAYLOAD_LENGTH]; /**< Koordinator dummy Paket */
 static uint8_t txBuffer[RESPONSE_PAYLOAD_LENGTH]; /**< Client dummy Paket */
 #endif
 
+uint8_t CRCValue;
+
 /* Received frames are buffered to rxframe in the interrupt routine in
    hal.c */
 uint8_t rxframe_head,rxframe_tail;
@@ -251,6 +253,7 @@ rf231_init(void)
 
   /* create a dummy packet */
 #ifdef SLOTTED_KOORDINATOR
+  /* Koordinator Beacon Frame */
   buffer[0]=0xa0;            /* fcf*/
   buffer[1]=0x06;
   buffer[2]=0x00;            /* sqn */
@@ -276,6 +279,7 @@ rf231_init(void)
   buffer[22]=0x00;        /* FCS */
   buffer[23]=0x00;
 #else
+  /* the Client Response Frame */
   buffer[0]=0xa2;            /* fcf*/
   buffer[1]=0x26;
   buffer[2]=0x00;            /* sqn */
@@ -290,7 +294,7 @@ rf231_init(void)
   buffer[11]=0x22;
   buffer[12]=0x33;
   buffer[13]=0x44;
-  buffer[14]=0x00;         /* PL 2*/
+  buffer[14]=0x00;         /* FCS */
   buffer[15]=0x00;
 #endif
 
@@ -350,6 +354,7 @@ rf231_init(void)
   hal_register_write(RG_IRQ_MASK, RF230_SUPPORTED_INTERRUPT_MASK);
 
 #ifdef SLOTTED_KOORDINATOR
+  /* any other value working as well */
   hal_set_TX_Timer(TDMA_PERIOD_TICKS);
 #endif
   hal_reset_counter();
@@ -446,7 +451,7 @@ rf231_warm_reset(void) {
 
 /* Limit tx power for testing miniature Raven mesh */
 #ifdef RF230_MAX_TX_POWER
-  set_txpower(RF230_MAX_TX_POWER);  //0=3dbm 15=-17.2dbm
+  hal_subregister_write(SR_TX_PWR,RF230_MAX_TX_POWER);  //0=3dbm 15=-17.2dbm
 #endif
 
   
@@ -845,7 +850,7 @@ rf231_off(void)
   return 1;
 }
 
-/*---------------------------------------------------------------------------*/
+/*-rf--------------------------------------------------------------------------*/
 int
 rf231_on(void)
 {
@@ -872,9 +877,16 @@ static void calculate_period()
   int i;
   uint32_t AvgPeriod;
 
-  /* substract last stored value with the first sotred and divide by number of periods */
-  rf231_slotted_config.Period = (PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1] 
-	    - PeriodBuffer.Buff[PeriodBuffer.PutPos])  >> NUM_PERIODS_BASE;
+  if (state == RF231_STATE_SYNCHED){
+    /* calculate period using FIR filtering if already synchronized */
+    rf231_slotted_config.Period = (0.95 * rf231_slotted_config.Period) 
+      + (0.05 * PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1]);
+  } else {
+    /* calculate using moving average filter
+     * substract last stored value with the first sotred and divide by number of periods */
+    rf231_slotted_config.Period = (PeriodBuffer.Buff[(PeriodBuffer.PutPos) - 1] 
+				   - PeriodBuffer.Buff[PeriodBuffer.PutPos])  >> NUM_PERIODS_BASE;
+  }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -903,31 +915,39 @@ PROCESS_THREAD(rf231_slotted_process, ev, data)
       // hal_set_oc(lastBeaconTime + rf231_slotted_config.slotOffsett + 1000);
     }
     if(ev==HANDLE_PACKET_EVENT){
+#ifndef SLOTTED_KOORDINATOR
       hal_frame_read(rxframe);
-      if(rxframe[0].data[0] == 0xa0) {
+      CRCValue = hal_subregister_read(SR_RX_CRC_VALID);
+      /* check if this is a beacon (client side) */
+      if((CRCValue == 1) && (rxframe[0].data[0] == 0xa0)) {
+    	rxframe[0].data[0] == 0x00;
         hal_set_oc(lastBeaconTime + rf231_slotted_config.slotOffsett - HARDWARE_DELAY_TICKS);
-	ioboard_leds_set(rxframe[0].data[10]);
-	state = RF231_STATE_SEND;
-	rf231_set_trx_state(PLL_ON);
-	rf231_upload_packet(16);
-	hal_set_TX_Mode_Timer(lastBeaconTime + TDMA_PERIOD_TICKS - (2 * KOORD_PROCESSING_TIME_TICKS));
-	if (counter == 500) {
-	  leds_on(LEDS_GREEN);
-	  //  ioboard_leds_set(0xff);
-	  ++counter;
-	} else if (counter >= 1000) {
-	  leds_off(LEDS_GREEN);
-	  //ioboard_leds_set(0);
-	      counter = 0;
-	} else {
-	  ++counter;
-	}
+        ioboard_leds_set(rxframe[0].data[10]);
+        state = RF231_STATE_SEND;
+        rf231_set_trx_state(PLL_ON);
+        rf231_upload_packet(16);
+        ioboard_leds_toggle(1);
+        hal_set_TX_Mode_Timer(lastBeaconTime + TDMA_PERIOD_TICKS - (2 * KOORD_PROCESSING_TIME_TICKS));
+        if (counter == 500) {
+        	leds_on(LEDS_GREEN);
+		  //  ioboard_leds_set(0xff);
+		  ++counter;
+		} else if (counter >= 1000) {
+		  leds_off(LEDS_GREEN);
+		  //ioboard_leds_set(0);
+			  counter = 0;
+		} else {
+		  ++counter;
+		}
       }
-    }
+#else
+      hal_set_TX_Mode_Timer(hal_get_oc() - KOORD_PROCESSING_TIME_TICKS);
+#endif
+	}
     if(ev==TX_MODE_TIMER_EVENT){
 #ifdef SLOTTED_KOORDINATOR
-      state = RF231_STATE_SEND;
-      buffer[10] = ioboard_buttons_get();
+    	state = RF231_STATE_SEND;
+    	buffer[10] = ioboard_buttons_get();
       rf231_set_trx_state(PLL_ON);
       rf231_upload_packet(24);
       if (counter == 500) {

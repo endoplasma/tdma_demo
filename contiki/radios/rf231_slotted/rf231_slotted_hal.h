@@ -16,7 +16,7 @@
 #include "rf231_slotted.h"
 #include "ioboard.h"
 
-
+uint32_t hal_get_oc();
 
 /******************************************************************************
  * AT86 RF231 PORT Definitions

@@ -161,6 +161,8 @@
 #define SR_reserved_06_1             0x06, 0xe0, 5
 /** Access parameters for sub-register RSSI in register @ref RG_PHY_RSSI */
 #define SR_RSSI                      0x06, 0x1f, 0
+/** CRC indicator register */
+#define SR_RX_CRC_VALID                 0x06, 0x80, 7
 /** Offset for register PHY_ED_LEVEL */
 #define RG_PHY_ED_LEVEL                  (0x07)
 /** Access parameters for sub-register ED_LEVEL in register @ref RG_PHY_ED_LEVEL */
@@ -184,6 +186,7 @@
 /** Access parameters for sub-register IRQ_MASK in register @ref RG_IRQ_MASK */
 #define SR_IRQ_MASK                  0x0e, 0xff, 0
 
+//TODO
 #define MASK_RX_START                (0x04)
 #define MASK_TRX_END                 (0x08)
 #define MASK_AMI                     (0x20)
@@ -253,6 +256,7 @@
 /** Offset for register XAH_CTRL_1 */
 #define RG_XAH_CTRL_1                      0x17
 
+//TODO
 #define SR_AACK_FLTR_RES_FT          0x17, 0x20, 5
 #define SR_AACK_UPLD_RES_FT          0x17, 0x10, 4
 #define SR_AACK_ACK_TIME             0x17, 0x04, 2
